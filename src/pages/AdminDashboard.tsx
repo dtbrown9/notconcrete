@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { generateSubtleGradient } from '../utils/gradientGenerator'
 
 type Quote = {
   id: number
@@ -27,6 +28,7 @@ export function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [error, setError] = useState('')
+  const [heroGradient, setHeroGradient] = useState('')
 
   // Settings state
   const [currentPasswordInput, setCurrentPasswordInput] = useState('')
@@ -38,6 +40,7 @@ export function AdminDashboard() {
   // Check setup status on mount
   useEffect(() => {
     checkSetupStatus()
+    setHeroGradient(generateSubtleGradient())
   }, [])
 
   const checkSetupStatus = async () => {
@@ -247,9 +250,19 @@ export function AdminDashboard() {
     return <div className="admin-loading">Loading...</div>
   }
 
+  const HeroSection = () => (
+    <div className="admin-hero" style={{ background: heroGradient }}>
+      <div className="admin-hero-overlay">
+        <h1>Admin Dashboard</h1>
+        <p>Manage customer quotes and account settings</p>
+      </div>
+    </div>
+  )
+
   if (currentPage === 'setup') {
     return (
-      <div className="admin-login">
+      <>
+        <HeroSection />
         <div className="admin-login-card glass">
           <h2>Set Admin Password</h2>
           <p style={{ color: '#c9d4e5', marginBottom: '20px', fontSize: '14px' }}>
@@ -282,13 +295,14 @@ export function AdminDashboard() {
             </button>
           </form>
         </div>
-      </div>
+      </>
     )
   }
 
   if (currentPage === 'login' || !isAuthenticated) {
     return (
-      <div className="admin-login">
+      <>
+        <HeroSection />
         <div className="admin-login-card glass">
           <h2>Admin Dashboard</h2>
           <form onSubmit={handleLogin}>
@@ -308,12 +322,13 @@ export function AdminDashboard() {
             </button>
           </form>
         </div>
-      </div>
+      </>
     )
   }
 
   return (
-    <div className="admin-dashboard">
+    <>
+      <HeroSection />
       <div className="admin-header">
         <h2>Quote Management Dashboard</h2>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -490,6 +505,6 @@ export function AdminDashboard() {
           </div>
         </>
       )}
-    </div>
+    </>
   )
 }
