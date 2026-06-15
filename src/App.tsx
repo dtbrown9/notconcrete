@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './styles.css'
 import './styles-enhanced.css'
 import { AdminDashboard } from './pages/AdminDashboard'
+import { generateSubtleGradient } from './utils/gradientGenerator'
 
 function HamburgerMenu() {
   const [isOpen, setIsOpen] = useState(false)
@@ -123,6 +124,11 @@ export default function App() {
   const [quoteForm, setQuoteForm] = useState(initialForm)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [currentPage, setCurrentPage] = useState<'home' | 'admin'>('home')
+  const [heroGradient, setHeroGradient] = useState('')
+  const [servicesHeadingGradient, setServicesHeadingGradient] = useState('')
+  const [processHeadingGradient, setProcessHeadingGradient] = useState('')
+  const [testimonialHeadingGradient, setTestimonialHeadingGradient] = useState('')
+  const [serviceAreaHeadingGradient, setServiceAreaHeadingGradient] = useState('')
 
   // Handle routing based on pathname
   useEffect(() => {
@@ -140,6 +146,15 @@ export default function App() {
 
     window.addEventListener('popstate', handlePopstate)
     return () => window.removeEventListener('popstate', handlePopstate)
+  }, [])
+
+  // Initialize random gradients on mount
+  useEffect(() => {
+    setHeroGradient(generateSubtleGradient())
+    setServicesHeadingGradient(generateSubtleGradient())
+    setProcessHeadingGradient(generateSubtleGradient())
+    setTestimonialHeadingGradient(generateSubtleGradient())
+    setServiceAreaHeadingGradient(generateSubtleGradient())
   }, [])
 
   useEffect(() => {
@@ -222,7 +237,7 @@ export default function App() {
 
   return (
     <div className="page-shell">
-      <header className="hero">
+      <header className="hero" style={{ background: heroGradient }}>
         <nav className="topbar">
           <div>
             <p className="eyebrow">Not Concrete Cleaning Co.</p>
@@ -285,7 +300,7 @@ export default function App() {
 
       <main>
         <section id="services" className="section-block">
-          <div className="section-heading">
+          <div className="section-heading" style={{ background: servicesHeadingGradient }}>
             <p className="eyebrow">Services</p>
             <h2>Services grouped by project type, so it’s easy to find what fits.</h2>
             <p className="section-subcopy">
@@ -317,7 +332,7 @@ export default function App() {
         </section>
 
         <section id="process" className="section-block split-layout">
-          <div>
+          <div style={{ background: processHeadingGradient, padding: '20px', borderRadius: '12px' }}>
             <p className="eyebrow">Process</p>
             <h2>Simple steps, clear communication, no guessing.</h2>
             <div className="process-grid">
@@ -347,7 +362,7 @@ export default function App() {
         </section>
 
         <section id="results" className="section-block">
-          <div>
+          <div style={{ background: testimonialHeadingGradient, padding: '20px', borderRadius: '12px' }}>
             <p className="eyebrow">Testimonials</p>
             <h2>Clients remember the professionalism and the finish.</h2>
           </div>
@@ -365,7 +380,7 @@ export default function App() {
         </section>
 
         <section className="section-block split-layout">
-          <div>
+          <div style={{ background: serviceAreaHeadingGradient, padding: '20px', borderRadius: '12px' }}>
             <p className="eyebrow">Service Area</p>
             <h2>Serving local homes, apartments, offices, and job sites.</h2>
             <div className="service-area-list">
