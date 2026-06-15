@@ -263,7 +263,8 @@ export function AdminDashboard() {
     return (
       <>
         <HeroSection />
-        <div className="admin-login-card glass">
+        <div className="admin-login-container">
+          <div className="admin-login-card glass">
           <h2>Set Admin Password</h2>
           <p style={{ color: '#c9d4e5', marginBottom: '20px', fontSize: '14px' }}>
             This is your first time setting up the admin dashboard. Please create a secure password.
@@ -294,6 +295,7 @@ export function AdminDashboard() {
               Set Password
             </button>
           </form>
+          </div>
         </div>
       </>
     )
@@ -303,7 +305,8 @@ export function AdminDashboard() {
     return (
       <>
         <HeroSection />
-        <div className="admin-login-card glass">
+        <div className="admin-login-container">
+          <div className="admin-login-card glass">
           <h2>Admin Dashboard</h2>
           <form onSubmit={handleLogin}>
             <div className="form-group">
@@ -321,6 +324,7 @@ export function AdminDashboard() {
               Login
             </button>
           </form>
+          </div>
         </div>
       </>
     )

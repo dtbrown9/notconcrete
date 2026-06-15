@@ -96,6 +96,86 @@ body {
   text-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
 }
 
+/* Admin Login Container - Centering Wrapper */
+.admin-login-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+  min-height: 50vh;
+}
+
+/* Admin Login Card */
+.admin-login-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-login-card h2 {
+  margin-top: 0;
+  text-align: center;
+  font-size: 1.75rem;
+}
+
+.admin-login-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-login-card .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-login-card .form-group label {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.admin-login-card .form-group input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f5f7fb;
+  font-size: 1rem;
+}
+
+.admin-login-card .form-group input::placeholder {
+  color: var(--text-soft);
+}
+
+.admin-login-card .form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 12px rgba(125, 211, 252, 0.2);
+}
+
+.admin-login-card .error-text {
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.admin-login-card .success-text {
+  color: #51cf66;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.admin-login-card .primary-button {
+  margin-top: 8px;
+  width: 100%;
+}
+
 button,
 input,
 textarea {
