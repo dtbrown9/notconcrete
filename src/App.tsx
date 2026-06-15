@@ -34,6 +34,9 @@ function HamburgerMenu() {
           <a href="#quote-form" onClick={() => setIsOpen(false)}>
             Quote
           </a>
+          <a href="#contact" onClick={() => setIsOpen(false)}>
+            Contact
+          </a>
           <a href="#admin" onClick={() => {
             navigateTo('/admin')
           }} style={{ fontSize: '12px', opacity: '0.7' }}>
@@ -379,7 +382,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="section-block split-layout">
+        <section id="contact" className="section-block split-layout">
           <div style={{ background: serviceAreaHeadingGradient, padding: '20px', borderRadius: '12px' }}>
             <p className="eyebrow">Service Area</p>
             <h2>Serving local homes, apartments, offices, and job sites.</h2>
