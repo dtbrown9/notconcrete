@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
-    "build": "npx vite build && npx tsc -p server/tsconfig.json",
+    "build": "npm ci && npx vite build && npx tsc -p server/tsconfig.json",
     "start": "node dist/server/index.js",
     "server": "tsx server/index.ts",
     "lint": "eslint .",
