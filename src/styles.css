@@ -44,6 +44,46 @@ html {
   }
 }
 
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(125, 211, 252, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(125, 211, 252, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -336,7 +376,8 @@ a:hover {
   background: linear-gradient(135deg, rgba(9, 18, 34, 0.86), rgba(12, 24, 46, 0.7));
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(125, 211, 252, 0.1);
   position: relative;
-  animation: fadeIn 0.6s ease-in;
+  animation: fadeIn 0.6s ease-in, glow 3s ease-in-out infinite;
+  animation-delay: 0s, 0.8s;
 }
 
 @keyframes fadeIn {
@@ -397,12 +438,19 @@ a:hover {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   color: #eef5ff;
+  transition: all 0.3s ease;
 }
 
-.hero-copy {
+.top-links a:hover {
+  background: rgba(125, 211, 252, 0.15);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(125, 211, 252, 0.15);
+}
   text-align: center;
   max-width: 700px;
   margin: 0 auto;
+  animation: slideInUp 0.8s ease-out 0.2s both;
 }
   flex: 1;
 }
@@ -474,15 +522,37 @@ a:hover {
   max-width: 600px;
   margin-left: auto;
   margin-right: auto;
-  gap: 10px;
-  margin: 14px 0 4px;
+  gap: 12px;
+  margin: 24px 0 8px;
 }
 
 .quick-facts div {
-  padding: 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 18px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(125, 211, 252, 0.08), rgba(236, 72, 153, 0.04));
+  border: 1px solid rgba(125, 211, 252, 0.15);
+  animation: slideInUp 0.8s ease-out;
+  transition: all 0.3s ease;
+  cursor: default;
+}
+
+.quick-facts div:nth-child(1) {
+  animation-delay: 0.3s;
+}
+
+.quick-facts div:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+.quick-facts div:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+.quick-facts div:hover {
+  background: linear-gradient(135deg, rgba(125, 211, 252, 0.12), rgba(236, 72, 153, 0.08));
+  border-color: rgba(125, 211, 252, 0.25);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(125, 211, 252, 0.1);
 }
 
 .quick-facts strong,
@@ -525,6 +595,26 @@ a:hover {
   line-height: 1.6;
 }
 
+.section-heading h2 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin: 12px 0 8px 0;
+  letter-spacing: -0.02em;
+}
+
+.section-heading .eyebrow {
+  margin-bottom: 4px;
+}
+
+.section-heading .section-subcopy {
+  font-size: 1.05rem;
+  color: rgba(201, 212, 229, 0.9);
+  margin: 0;
+  max-width: 60ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .hero h1 {
   margin: 0;
   font-size: clamp(2.5rem, 5vw, 4.8rem);
@@ -562,6 +652,33 @@ a:hover {
   background: linear-gradient(135deg, var(--accent-strong), #0ea5e9);
   color: #04101b;
   font-weight: 700;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.primary-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.primary-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(56, 189, 248, 0.4), 0 0 20px rgba(125, 211, 252, 0.3);
+}
+
+.primary-button:hover::before {
+  left: 100%;
+}
+
+.primary-button:active {
+  transform: translateY(0);
 }
 
 .secondary-button,
@@ -569,6 +686,21 @@ a:hover {
   background: rgba(255, 255, 255, 0.04);
   border-color: var(--border);
   color: #f5f7fb;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.secondary-button:hover,
+.ghost-button:hover {
+  background: rgba(125, 211, 252, 0.12);
+  border-color: rgba(125, 211, 252, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(125, 211, 252, 0.2);
+}
+
+.secondary-button:active,
+.ghost-button:active {
+  transform: translateY(0);
 }
 
 .section-block {
@@ -579,6 +711,30 @@ a:hover {
 .section-heading {
   flex-direction: column;
   margin-bottom: 18px;
+  padding: 60px 40px;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.section-heading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 20% 50%, rgba(125, 211, 252, 0.08) 0%, transparent 50%),
+              radial-gradient(circle at 80% 80%, rgba(236, 72, 153, 0.08) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.section-heading > * {
+  position: relative;
+  z-index: 2;
 }
 
 .service-section-list {
@@ -604,8 +760,14 @@ a:hover {
 
 .cta-row {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   justify-content: center;
+  animation: slideInUp 0.8s ease-out 0.4s both;
+}
+
+.cta-row button,
+.cta-row a {
+  transition: all 0.3s ease;
 }
 
 select {
