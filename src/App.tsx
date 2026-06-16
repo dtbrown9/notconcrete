@@ -178,13 +178,33 @@ export default function App() {
 
   useEffect(() => {
     const load = async () => {
-      const siteRes = await fetch(`${apiBase}/site`)
-      const siteJson = (await siteRes.json()) as SitePayload
-      setData(siteJson)
+      try {
+        // Try the proxied endpoint first
+        const siteRes = await fetch(`${apiBase}/site`)
+        if (siteRes.ok) {
+          const siteJson = (await siteRes.json()) as SitePayload
+          setData(siteJson)
+        } else {
+          // Fallback to direct backend URL
+          const directRes = await fetch(`http://localhost:3001${apiBase}/site`)
+          const siteJson = (await directRes.json()) as SitePayload
+          setData(siteJson)
+        }
+      } catch {
+        // If both fail, try the direct backend URL as last resort
+        try {
+          const directRes = await fetch(`http://localhost:3001${apiBase}/site`)
+          const siteJson = (await directRes.json()) as SitePayload
+          setData(siteJson)
+        } catch {
+          // Finally, if all else fails, just keep loading
+          console.error('Failed to fetch site data from both proxy and direct backend')
+        }
+      }
       setLoading(false)
     }
 
-    load().catch(() => setLoading(false))
+    load()
   }, [])
 
   const serviceGroups = useMemo(() => {
