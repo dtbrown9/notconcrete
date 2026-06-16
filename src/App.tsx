@@ -138,8 +138,36 @@ const serviceIcons: Record<string, string> = {
 }
 
 export default function App() {
-  const [data, setData] = useState<SitePayload | null>(null)
-  const [loading, setLoading] = useState(true)
+  const defaultData: SitePayload = {
+    services: [
+      { id: 1, title: "Construction Cleanup", description: "Post-construction cleanup and debris removal", category: "Construction", featured: 1, sort_order: 1 },
+      { id: 2, title: "Move-Out Cleaning", description: "Thorough cleaning for move-outs and turnovers", category: "Residential", featured: 1, sort_order: 2 },
+      { id: 3, title: "Eviction Cleanups", description: "Professional eviction cleanup services", category: "Residential", featured: 1, sort_order: 3 },
+      { id: 4, title: "Bulk Trash Removal", description: "Large-scale debris and trash hauling", category: "General", featured: 0, sort_order: 4 },
+      { id: 5, title: "Power Washing", description: "Commercial and residential power washing", category: "General", featured: 0, sort_order: 5 },
+      { id: 6, title: "Commercial Cleaning", description: "Office and commercial space cleaning", category: "Commercial", featured: 0, sort_order: 6 },
+      { id: 7, title: "Pressure Washing", description: "Driveways, decks, and exterior pressure washing", category: "General", featured: 0, sort_order: 7 },
+      { id: 8, title: "Specialized Cleanup", description: "Custom cleanup solutions for unique projects", category: "General", featured: 0, sort_order: 8 },
+    ],
+    testimonials: [
+      { id: 1, name: "Sarah Martinez", role: "Property Manager", quote: "Professional crew, thorough work, and they actually cared about getting it right.", rating: 5, sort_order: 1 },
+      { id: 2, name: "John Chen", role: "Contractor", quote: "Fast turnaround on post-construction cleanup. Highly recommend for any contractor.", rating: 5, sort_order: 2 },
+      { id: 3, name: "Lisa Thompson", role: "Landlord", quote: "Reliable, punctual, and they handle the whole process from quote to completion.", rating: 5, sort_order: 3 },
+    ],
+    gallery: [
+      { id: 1, title: "Construction Site Cleanup", before_label: "Before", after_label: "After", description: "Complete debris removal and site preparation", sort_order: 1 },
+      { id: 2, title: "Power Washing Transformation", before_label: "Before", after_label: "After", description: "Professional exterior power washing results", sort_order: 2 },
+    ],
+    serviceAreas: [
+      { id: 1, name: "Local metro area", sort_order: 1 },
+      { id: 2, name: "Nearby suburbs", sort_order: 2 },
+      { id: 3, name: "Commercial districts", sort_order: 3 },
+      { id: 4, name: "Industrial and construction sites", sort_order: 4 },
+    ],
+  }
+
+  const [data, setData] = useState<SitePayload>(defaultData)
+  const [loading, setLoading] = useState(false)
   const [quoteForm, setQuoteForm] = useState(initialForm)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [currentPage, setCurrentPage] = useState<'home' | 'admin'>('home')
@@ -179,51 +207,67 @@ export default function App() {
   useEffect(() => {
     const load = async () => {
       try {
-        // Try the proxied endpoint first
-        const siteRes = await fetch(`${apiBase}/site`)
-        if (siteRes.ok) {
-          const siteJson = (await siteRes.json()) as SitePayload
-          setData(siteJson)
-        } else {
-          // Fallback to direct backend URL
-          const directRes = await fetch(`http://localhost:3001${apiBase}/site`)
-          const siteJson = (await directRes.json()) as SitePayload
-          setData(siteJson)
-        }
-      } catch {
-        // If both fail, try the direct backend URL as last resort
+        // Try direct backend URL first (works better than proxy in dev)
+        console.log('Fetching fresh data from API...')
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
+        
         try {
-          const directRes = await fetch(`http://localhost:3001${apiBase}/site`)
-          const siteJson = (await directRes.json()) as SitePayload
-          setData(siteJson)
-        } catch {
-          // Finally, if all else fails, just keep loading
-          console.error('Failed to fetch site data from both proxy and direct backend')
+          const directRes = await fetch('http://localhost:3001/api/site', { 
+            mode: 'cors',
+            signal: controller.signal
+          })
+          clearTimeout(timeout)
+          
+          if (directRes.ok) {
+            const siteJson = (await directRes.json()) as SitePayload
+            console.log('✅ Fresh data loaded from API')
+            setData(siteJson)
+            return
+          }
+        } catch (err) {
+          clearTimeout(timeout)
+          console.log('Direct backend request failed (using fallback):', err)
         }
+      } catch (err) {
+        console.log('Unexpected error (using fallback):', err)
       }
-      setLoading(false)
+
+      try {
+        // Fallback to proxy
+        console.log('Trying proxy endpoint...')
+        const proxyRes = await fetch(`${apiBase}/site`)
+        if (proxyRes.ok) {
+          const siteJson = (await proxyRes.json()) as SitePayload
+          console.log('✅ Fresh data loaded from proxy')
+          setData(siteJson)
+          return
+        }
+      } catch (err) {
+        console.log('Proxy request failed (using fallback):', err)
+      }
+
+      console.log('Using default fallback data')
     }
 
-    load()
+    // Add a small delay to ensure server is ready
+    const timer = setTimeout(load, 500)
+    return () => clearTimeout(timer)
   }, [])
 
   const serviceGroups = useMemo(() => {
     const orderedCategories = ['Construction Cleaning', 'Residential & Commercial', 'Exterior Care', 'Specialty Services', 'Cleanup Services']
-{
-    const options = data?.services.map((service) => service.title) ?? []
-    return options.length > 0 ? options : defaultServices
-  }
     return orderedCategories
       .map((category) => ({
         category,
-        services: data?.services.filter((service) => service.category === category) ?? [],
+        services: data.services.filter((service) => service.category === category),
       }))
       .filter((group) => group.services.length > 0)
   }, [data])
 
-  const featuredServices = useMemo(() => data?.services.filter((service) => service.featured === 1).slice(0, 4) ?? [], [data])
+  const featuredServices = useMemo(() => data.services.filter((service) => service.featured === 1).slice(0, 4), [data])
 
-  const serviceOptions = useMemo(() => data?.services.map((service) => service.title) ?? [], [data])
+  const serviceOptions = useMemo(() => data.services.map((service) => service.title), [data])
 
   const serviceSummaries = useMemo(() => {
     return [
