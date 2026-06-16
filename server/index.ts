@@ -5,11 +5,17 @@ import { randomBytes, scryptSync } from 'node:crypto'
 import path from 'node:path'
 import dotenv from 'dotenv'
 
-// Load environment variables from .env.local
-dotenv.config({ path: '.env.local' })
+// Load environment variables from .env.local (development only)
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: '.env.local' })
+}
 
 const app = express()
 const port = Number(process.env.PORT || 3001)
+
+// Log database connection status
+console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`)
+console.log(`DATABASE_URL is ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`)
 
 // PostgreSQL connection pool
 const pool = new Pool({
