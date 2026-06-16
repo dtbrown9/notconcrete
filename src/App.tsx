@@ -121,6 +121,22 @@ const defaultServices = [
   'Bulk Trash Removal'
 ]
 
+// Service icons mapping
+const serviceIcons: Record<string, string> = {
+  'Final Cleaning': '✨',
+  'Mid-Project Cleaning': '🧹',
+  'Pre-Construction Prep': '🏗️',
+  'Move-Out / Before Move-In Cleaning': '🔑',
+  'Commercial & Residential Power Washing': '💨',
+  'Eviction Cleanups': '🏠',
+  'Demo Cleanup': '🚛',
+  'Bulk Trash Removal': '♻️',
+  'Construction cleanup': '🏗️',
+  'Property turnovers': '🏠',
+  'Exterior refresh': '💨',
+  'Special cases': '⚡',
+}
+
 export default function App() {
   const [data, setData] = useState<SitePayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -323,7 +339,10 @@ export default function App() {
                   <div className="service-grid service-grid-tight">
                     {group.items.map((service) => (
                       <article key={service.id} className="service-card service-card-organized">
-                        <h4>{service.title}</h4>
+                        <h4>
+                          <span className="service-icon">{serviceIcons[service.title] || '🔧'}</span>
+                          {service.title}
+                        </h4>
                         <p>{service.description}</p>
                       </article>
                     ))}
