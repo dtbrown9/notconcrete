@@ -4,6 +4,10 @@ import { Pool } from 'pg'
 import { randomBytes, scryptSync } from 'node:crypto'
 import path from 'node:path'
 import dotenv from 'dotenv'
+import dns from 'node:dns'
+
+// Force IPv4 DNS resolution (fixes Render/Supabase connection issues)
+dns.setDefaultResultOrder('ipv4first')
 
 // Load environment variables from .env.local (development only)
 if (process.env.NODE_ENV !== 'production') {
@@ -16,6 +20,7 @@ const port = Number(process.env.PORT || 3001)
 // Log database connection status
 console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`)
 console.log(`DATABASE_URL is ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`)
+console.log(`DNS resolution set to IPv4 first`)
 
 // PostgreSQL connection pool
 const pool = new Pool({
