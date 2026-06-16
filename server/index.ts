@@ -1,6 +1,5 @@
 import cors from 'cors'
 import express from 'express'
-import { Pool } from 'pg'
 import { randomBytes, scryptSync } from 'node:crypto'
 import path from 'node:path'
 import dotenv from 'dotenv'
@@ -13,20 +12,77 @@ if (process.env.NODE_ENV !== 'production') {
 const app = express()
 const port = Number(process.env.PORT || 3001)
 
+// Supabase configuration
+const supabaseUrl = 'https://nbkahtpyukqojfbumcwz.supabase.co'
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ia2FodHB5dWtxb2pmYnVtY3d6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODEzNjgsImV4cCI6MjA5NzE1NzM2OH0.yQSkC8RzWPZWHzPzxzDc-i64_wARg_qPMpv50btDoDo'
+
 // Log configuration
 console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`)
-console.log(`DATABASE_URL is ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`)
+console.log(`Supabase URL: ${supabaseUrl}`)
+console.log(`Using Supabase REST API (HTTPS, works on Render)`)
 
-// PostgreSQL connection pool with SSL for Render compatibility
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === 'production'
-      ? {
-          rejectUnauthorized: false, // Required for Render + Supabase
-        }
-      : false,
-})
+// Helper to make Supabase REST API requests
+async function supabaseQuery(sql: string, params: unknown[] = []): Promise<unknown> {
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/execute_query`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'Content-Type': 'application/json',
+      'apikey': supabaseAnonKey,
+    },
+    body: JSON.stringify({ sql, params }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Supabase API error: ${response.status} ${response.statusText}`)
+  }
+
+  return response.json()
+}
+
+// Simpler fetch-based approach for REST API
+async function supabaseSelect(table: string, options?: { order?: string; limit?: number }) {
+  const url = new URL(`${supabaseUrl}/rest/v1/${table}`)
+  if (options?.order) {
+    url.searchParams.set('order', options.order)
+  }
+  if (options?.limit) {
+    url.searchParams.set('limit', String(options.limit))
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'apikey': supabaseAnonKey,
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Supabase API error: ${response.status} ${response.statusText}`)
+  }
+
+  return response.json()
+}
+
+async function supabaseInsert(table: string, data: Record<string, unknown>) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'apikey': supabaseAnonKey,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Supabase API error: ${response.status} ${error}`)
+  }
+
+  return response.json()
+}
 
 // Password hashing utilities
 const hashPassword = (password: string): { hash: string; salt: string } => {
@@ -164,139 +220,14 @@ const fallbackData = {
   ],
 }
 
-// Initialize database schema
+// Initialize database on startup (just log status with REST API)
 const initializeDatabase = async () => {
-  const client = await pool.connect()
   try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS services (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        category TEXT NOT NULL,
-        featured INTEGER NOT NULL DEFAULT 0,
-        sort_order INTEGER NOT NULL DEFAULT 0
-      )
-    `)
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS testimonials (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        role TEXT NOT NULL,
-        quote TEXT NOT NULL,
-        rating INTEGER NOT NULL DEFAULT 5,
-        sort_order INTEGER NOT NULL DEFAULT 0
-      )
-    `)
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS gallery_items (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        before_label TEXT NOT NULL,
-        after_label TEXT NOT NULL,
-        description TEXT NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0
-      )
-    `)
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS service_areas (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0
-      )
-    `)
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS quote_requests (
-        id SERIAL PRIMARY KEY,
-        full_name TEXT NOT NULL,
-        phone TEXT NOT NULL,
-        email TEXT NOT NULL,
-        service_type TEXT NOT NULL,
-        property_type TEXT NOT NULL,
-        address TEXT NOT NULL,
-        preferred_date TEXT,
-        details TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'new',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS admin_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        password_hash TEXT NOT NULL,
-        password_salt TEXT NOT NULL,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-
-    // Seed data
-    const seedQueries = [
-      `INSERT INTO services (title, description, category, featured, sort_order) 
-       SELECT 'Final Cleaning', 'Post-construction final cleaning that removes dust, debris, smudges, and leftover material before turnover.', 'Construction Cleaning', 1, 1
-       WHERE NOT EXISTS (SELECT 1 FROM services WHERE title = 'Final Cleaning')`,
-      `INSERT INTO services (title, description, category, featured, sort_order) 
-       SELECT 'Mid-Project Cleaning', 'Routine cleanup during active builds to keep the site safer, more organized, and easier to inspect.', 'Construction Cleaning', 1, 2
-       WHERE NOT EXISTS (SELECT 1 FROM services WHERE title = 'Mid-Project Cleaning')`,
-      `INSERT INTO services (title, description, category, featured, sort_order) 
-       SELECT 'Pre-Construction Prep', 'Prepping the site before work begins, including clearing surfaces, removing debris, and making space ready.', 'Construction Cleaning', 1, 3
-       WHERE NOT EXISTS (SELECT 1 FROM services WHERE title = 'Pre-Construction Prep')`,
-      `INSERT INTO services (title, description, category, featured, sort_order) 
-       SELECT 'Move-Out / Before Move-In Cleaning', 'Deep cleaning for homes, apartments, and offices before moving out or before new occupants arrive.', 'Residential & Commercial', 1, 4
-       WHERE NOT EXISTS (SELECT 1 FROM services WHERE title = 'Move-Out / Before Move-In Cleaning')`,
-      `INSERT INTO services (title, description, category, featured, sort_order) 
-       SELECT 'Demo Cleanup', 'Cleanup after demolition to remove debris, dust, and leftover materials from the job site.', 'Cleanup Services', 0, 5
-       WHERE NOT EXISTS (SELECT 1 FROM services WHERE title = 'Demo Cleanup')`,
-      `INSERT INTO services (title, description, category, featured, sort_order) 
-       SELECT 'Bulk Trash Removal', 'Removal of unwanted bulk items, construction waste, and site trash so the property stays clear.', 'Cleanup Services', 0, 6
-       WHERE NOT EXISTS (SELECT 1 FROM services WHERE title = 'Bulk Trash Removal')`,
-      `INSERT INTO services (title, description, category, featured, sort_order) 
-       SELECT 'Commercial & Residential Power Washing', 'Power washing for sidewalks, driveways, exterior walls, patios, storefronts, and other exterior surfaces.', 'Exterior Care', 1, 7
-       WHERE NOT EXISTS (SELECT 1 FROM services WHERE title = 'Commercial & Residential Power Washing')`,
-      `INSERT INTO services (title, description, category, featured, sort_order) 
-       SELECT 'Eviction Cleanups', 'Fast, respectful cleanup for rental turnovers, evictions, and abandoned spaces needing a fresh restart.', 'Specialty Services', 1, 8
-       WHERE NOT EXISTS (SELECT 1 FROM services WHERE title = 'Eviction Cleanups')`,
-      `INSERT INTO testimonials (name, role, quote, rating, sort_order) 
-       SELECT 'Marcus T.', 'Property Manager', 'They handled a full turnover, demo cleanup, and final wash with zero headaches. Professional from start to finish.', 5, 1
-       WHERE NOT EXISTS (SELECT 1 FROM testimonials WHERE name = 'Marcus T.')`,
-      `INSERT INTO testimonials (name, role, quote, rating, sort_order) 
-       SELECT 'Angela R.', 'Homeowner', 'The move-out cleaning was thorough and the crew was on time, respectful, and easy to work with.', 5, 2
-       WHERE NOT EXISTS (SELECT 1 FROM testimonials WHERE name = 'Angela R.')`,
-      `INSERT INTO testimonials (name, role, quote, rating, sort_order) 
-       SELECT 'Javier S.', 'Contractor', 'Their mid-project cleaning kept our site ready for inspection. We now use them on every build.', 5, 3
-       WHERE NOT EXISTS (SELECT 1 FROM testimonials WHERE name = 'Javier S.')`,
-      `INSERT INTO gallery_items (title, before_label, after_label, description, sort_order) 
-       SELECT 'Construction Final Clean', 'Dusty shell', 'Move-in ready finish', 'A full post-build cleanup that turns a worksite into a polished final product.', 1
-       WHERE NOT EXISTS (SELECT 1 FROM gallery_items WHERE title = 'Construction Final Clean')`,
-      `INSERT INTO gallery_items (title, before_label, after_label, description, sort_order) 
-       SELECT 'Driveway Power Wash', 'Stained concrete', 'Bright restored surface', 'Professional exterior washing for concrete, sidewalks, patios, and entryways.', 2
-       WHERE NOT EXISTS (SELECT 1 FROM gallery_items WHERE title = 'Driveway Power Wash')`,
-      `INSERT INTO gallery_items (title, before_label, after_label, description, sort_order) 
-       SELECT 'Vacant Property Cleanup', 'Leftover debris', 'Clear and ready', 'Eviction and turnover cleanup that prepares a property for the next tenant or owner.', 3
-       WHERE NOT EXISTS (SELECT 1 FROM gallery_items WHERE title = 'Vacant Property Cleanup')`,
-      `INSERT INTO service_areas (name, sort_order) 
-       SELECT 'Local metro area', 1 WHERE NOT EXISTS (SELECT 1 FROM service_areas WHERE name = 'Local metro area')`,
-      `INSERT INTO service_areas (name, sort_order) 
-       SELECT 'Nearby suburbs', 2 WHERE NOT EXISTS (SELECT 1 FROM service_areas WHERE name = 'Nearby suburbs')`,
-      `INSERT INTO service_areas (name, sort_order) 
-       SELECT 'Commercial districts', 3 WHERE NOT EXISTS (SELECT 1 FROM service_areas WHERE name = 'Commercial districts')`,
-      `INSERT INTO service_areas (name, sort_order) 
-       SELECT 'Industrial and construction sites', 4 WHERE NOT EXISTS (SELECT 1 FROM service_areas WHERE name = 'Industrial and construction sites')`,
-    ]
-
-    for (const query of seedQueries) {
-      await client.query(query)
-    }
-
-    console.log('Database initialized successfully')
+    // Test connection by fetching services
+    await supabaseSelect('services', { limit: 1 })
+    console.log('✅ Supabase REST API connection successful')
   } catch (error) {
-    console.error('Error initializing database:', error)
-  } finally {
-    client.release()
+    console.error('⚠️ Supabase connection failed, using fallback data:', error)
   }
 }
 
@@ -312,19 +243,19 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/site', async (_req, res) => {
   try {
-    const services = await pool.query('SELECT * FROM services ORDER BY featured DESC, sort_order ASC')
-    const testimonials = await pool.query('SELECT * FROM testimonials ORDER BY sort_order ASC')
-    const gallery = await pool.query('SELECT * FROM gallery_items ORDER BY sort_order ASC')
-    const serviceAreas = await pool.query('SELECT * FROM service_areas ORDER BY sort_order ASC')
+    const services = await supabaseSelect('services', { order: 'featured.desc,sort_order.asc' })
+    const testimonials = await supabaseSelect('testimonials', { order: 'sort_order.asc' })
+    const gallery = await supabaseSelect('gallery_items', { order: 'sort_order.asc' })
+    const serviceAreas = await supabaseSelect('service_areas', { order: 'sort_order.asc' })
 
     res.json({
-      services: services.rows,
-      testimonials: testimonials.rows,
-      gallery: gallery.rows,
-      serviceAreas: serviceAreas.rows,
+      services: services || [],
+      testimonials: testimonials || [],
+      gallery: gallery || [],
+      serviceAreas: serviceAreas || [],
     })
   } catch (error) {
-    console.error('Error fetching site data from database, using fallback data:', error)
+    console.error('Error fetching site data from REST API, using fallback data:', error)
     // Use fallback data when database is unavailable
     res.json(fallbackData)
   }
@@ -351,20 +282,16 @@ app.post('/api/quotes', async (req, res) => {
   }
 
   try {
-    await pool.query(
-      `INSERT INTO quote_requests (full_name, phone, email, service_type, property_type, address, preferred_date, details)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        body.fullName?.trim(),
-        body.phone?.trim(),
-        body.email?.trim(),
-        body.serviceType?.trim(),
-        body.propertyType?.trim(),
-        body.address?.trim(),
-        body.preferredDate?.trim() || null,
-        body.details?.trim(),
-      ],
-    )
+    await supabaseInsert('quote_requests', {
+      full_name: body.fullName?.trim(),
+      phone: body.phone?.trim(),
+      email: body.email?.trim(),
+      service_type: body.serviceType?.trim(),
+      property_type: body.propertyType?.trim(),
+      address: body.address?.trim(),
+      preferred_date: body.preferredDate?.trim() || null,
+      details: body.details?.trim(),
+    })
     res.status(201).json({ ok: true })
   } catch (error) {
     console.error('Error creating quote:', error)
@@ -388,12 +315,12 @@ const checkAdminAuth = (req: express.Request, res: express.Response, next: expre
 
 const verifyAdminPassword = async (password: string): Promise<boolean> => {
   try {
-    const result = await pool.query('SELECT password_hash, password_salt FROM admin_settings WHERE id = 1')
-    if (result.rows.length === 0) {
+    const result = await supabaseSelect('admin_settings', { limit: 1 })
+    if (!result || result.length === 0) {
       return false
     }
 
-    const { password_hash, password_salt } = result.rows[0]
+    const { password_hash, password_salt } = result[0] as { password_hash: string; password_salt: string }
     return verifyPassword(password, password_hash, password_salt)
   } catch {
     return false
@@ -403,8 +330,8 @@ const verifyAdminPassword = async (password: string): Promise<boolean> => {
 // Admin: Check setup status
 app.get('/api/admin/setup-status', async (_req, res) => {
   try {
-    const result = await pool.query('SELECT COUNT(*) as count FROM admin_settings')
-    const isSetup = parseInt(result.rows[0].count, 10) > 0
+    const result = await supabaseSelect('admin_settings', { limit: 1 })
+    const isSetup = result && result.length > 0
     res.json({ isSetup })
   } catch (error) {
     console.error('Error checking setup status:', error)
@@ -428,17 +355,17 @@ app.post('/api/admin/setup', async (req, res) => {
 
   try {
     // Check if already setup
-    const existing = await pool.query('SELECT COUNT(*) as count FROM admin_settings')
-    if (parseInt(existing.rows[0].count, 10) > 0) {
+    const existing = await supabaseSelect('admin_settings', { limit: 1 })
+    if (existing && existing.length > 0) {
       return res.status(400).json({ message: 'Admin password already set' })
     }
 
     const { hash, salt } = hashPassword(password)
-    await pool.query('INSERT INTO admin_settings (id, password_hash, password_salt) VALUES ($1, $2, $3)', [
-      1,
-      hash,
-      salt,
-    ])
+    await supabaseInsert('admin_settings', {
+      id: 1,
+      password_hash: hash,
+      password_salt: salt,
+    })
 
     res.json({ ok: true })
   } catch (error) {
@@ -456,8 +383,8 @@ app.get('/api/admin/quotes', checkAdminAuth, async (req, res) => {
   }
 
   try {
-    const result = await pool.query('SELECT * FROM quote_requests ORDER BY created_at DESC')
-    res.json({ quotes: result.rows })
+    const quotes = await supabaseSelect('quote_requests', { order: 'created_at.desc' })
+    res.json({ quotes: quotes || [] })
   } catch (error) {
     console.error('Error fetching admin quotes:', error)
     res.status(500).json({ message: 'Failed to fetch quotes' })
@@ -486,7 +413,21 @@ app.patch('/api/admin/password', checkAdminAuth, async (req, res) => {
     }
 
     const { hash, salt } = hashPassword(newPassword)
-    await pool.query('UPDATE admin_settings SET password_hash = $1, password_salt = $2 WHERE id = 1', [hash, salt])
+    
+    // Update admin password via REST API
+    const response = await fetch(`${supabaseUrl}/rest/v1/admin_settings?id=eq.1`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password_hash: hash, password_salt: salt }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Update failed: ${response.status}`)
+    }
 
     res.json({ ok: true })
   } catch (error) {
@@ -518,7 +459,20 @@ app.patch('/api/admin/quotes/:id', checkAdminAuth, async (req, res) => {
   }
 
   try {
-    await pool.query('UPDATE quote_requests SET status = $1 WHERE id = $2', [status, quoteId] as any)
+    const response = await fetch(`${supabaseUrl}/rest/v1/quote_requests?id=eq.${quoteId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Update failed: ${response.status}`)
+    }
+
     res.json({ ok: true })
   } catch (error) {
     console.error('Error updating quote:', error)
@@ -537,7 +491,18 @@ app.delete('/api/admin/quotes/:id', checkAdminAuth, async (req, res) => {
   const id = req.params.id as string
 
   try {
-    await pool.query('DELETE FROM quote_requests WHERE id = $1', [parseInt(id, 10)] as any[])
+    const response = await fetch(`${supabaseUrl}/rest/v1/quote_requests?id=eq.${parseInt(id, 10)}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`)
+    }
+
     res.json({ ok: true })
   } catch (error) {
     console.error('Error deleting quote:', error)
@@ -554,16 +519,16 @@ app.get('/api/admin/quotes/export/csv', checkAdminAuth, async (req, res) => {
   }
 
   try {
-    const result = await pool.query('SELECT * FROM quote_requests ORDER BY created_at DESC')
+    const quotes = await supabaseSelect('quote_requests', { order: 'created_at.desc' })
 
-    if (result.rows.length === 0) {
+    if (!quotes || quotes.length === 0) {
       res.json({ message: 'No quotes to export' })
       return
     }
 
-    const columns = Object.keys(result.rows[0])
+    const columns = Object.keys(quotes[0])
     const csvHeader = columns.join(',')
-    const csvRows = result.rows.map((row: Record<string, unknown>) =>
+    const csvRows = quotes.map((row: Record<string, unknown>) =>
       columns
         .map((col) => {
           const cellVal = row[col]
