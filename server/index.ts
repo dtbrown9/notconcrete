@@ -263,8 +263,8 @@ app.get('/api/site', async (_req, res) => {
 
 app.get('/api/quotes', async (_req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM quote_requests ORDER BY created_at DESC')
-    res.json({ quotes: result.rows })
+    const quotes = await supabaseSelect('quote_requests', { order: 'created_at.desc' })
+    res.json({ quotes: quotes || [] })
   } catch (error) {
     console.error('Error fetching quotes:', error)
     res.status(500).json({ message: 'Failed to fetch quotes' })
