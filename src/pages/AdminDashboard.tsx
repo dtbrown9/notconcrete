@@ -15,6 +15,16 @@ type Quote = {
   created_at: string
 }
 
+type Feedback = {
+  id: number
+  name: string
+  email: string
+  rating: string
+  message: string
+  reviewed: boolean
+  created_at: string
+}
+
 type PageView = 'login' | 'setup' | 'dashboard' | 'settings'
 
 export function AdminDashboard() {
@@ -24,6 +34,7 @@ export function AdminDashboard() {
   const [setupConfirm, setSetupConfirm] = useState('')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [quotes, setQuotes] = useState<Quote[]>([])
+  const [feedback, setFeedback] = useState<Feedback[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -119,18 +130,34 @@ export function AdminDashboard() {
   const fetchQuotes = async (authPassword: string) => {
     setLoading(true)
     try {
-      const response = await fetch('/api/admin/quotes', {
-        headers: { Authorization: `Bearer ${authPassword}` },
-      })
-      if (response.ok) {
-        const data = await response.json()
+      const [quotesResponse, feedbackResponse] = await Promise.all([
+        fetch('/api/admin/quotes', {
+          headers: { Authorization: `Bearer ${authPassword}` },
+        }),
+        fetch('/api/admin/feedback', {
+          headers: { Authorization: `Bearer ${authPassword}` },
+        }),
+      ])
+
+      if (quotesResponse.ok) {
+        const data = await quotesResponse.json()
         setQuotes(data.quotes)
-        setError('')
       } else {
         setError('Failed to fetch quotes')
       }
+
+      if (feedbackResponse.ok) {
+        const data = await feedbackResponse.json()
+        setFeedback(data.feedback)
+      } else {
+        setError('Failed to fetch feedback')
+      }
+
+      if (quotesResponse.ok && feedbackResponse.ok) {
+        setError('')
+      }
     } catch (err) {
-      setError('Error fetching quotes')
+      setError('Error fetching dashboard data')
     } finally {
       setLoading(false)
     }
@@ -506,6 +533,44 @@ export function AdminDashboard() {
 
           <div className="admin-footer">
             <p>Total quotes: {quotes.length} | Filtered: {filteredQuotes.length}</p>
+          </div>
+
+          <div className="admin-feedback-section" style={{ marginTop: '32px' }}>
+            <h3>Customer Feedback for Review</h3>
+            {feedback.length === 0 ? (
+              <div className="admin-empty">No feedback received yet</div>
+            ) : (
+              <div className="admin-table-container">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Rating</th>
+                      <th>Message</th>
+                      <th>Reviewed</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {feedback.map((item) => (
+                      <tr key={item.id}>
+                        <td className="cell-name">{item.name}</td>
+                        <td className="cell-email">
+                          <a href={`mailto:${item.email}`}>{item.email}</a>
+                        </td>
+                        <td>{item.rating}</td>
+                        <td className="cell-details">
+                          <span title={item.message}>{item.message.substring(0, 70)}...</span>
+                        </td>
+                        <td>{item.reviewed ? 'Yes' : 'No'}</td>
+                        <td className="cell-date">{new Date(item.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}

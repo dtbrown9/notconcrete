@@ -15,6 +15,8 @@ const port = Number(process.env.PORT || 3001)
 // Supabase configuration
 const supabaseUrl = 'https://nbkahtpyukqojfbumcwz.supabase.co'
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ia2FodHB5dWtxb2pmYnVtY3d6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODEzNjgsImV4cCI6MjA5NzE1NzM2OH0.yQSkC8RzWPZWHzPzxzDc-i64_wARg_qPMpv50btDoDo'
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
+const supabaseApiKey = supabaseServiceKey
 
 // Log configuration
 console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`)
@@ -26,9 +28,9 @@ async function supabaseQuery(sql: string, params: unknown[] = []): Promise<unkno
   const response = await fetch(`${supabaseUrl}/rest/v1/rpc/execute_query`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'Authorization': `Bearer ${supabaseApiKey}`,
       'Content-Type': 'application/json',
-      'apikey': supabaseAnonKey,
+      'apikey': supabaseApiKey,
     },
     body: JSON.stringify({ sql, params }),
   })
@@ -52,8 +54,8 @@ async function supabaseSelect(table: string, options?: { order?: string; limit?:
 
   const response = await fetch(url.toString(), {
     headers: {
-      'Authorization': `Bearer ${supabaseAnonKey}`,
-      'apikey': supabaseAnonKey,
+      'Authorization': `Bearer ${supabaseApiKey}`,
+      'apikey': supabaseApiKey,
     },
   })
 
@@ -68,8 +70,8 @@ async function supabaseInsert(table: string, data: Record<string, unknown>) {
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${supabaseAnonKey}`,
-      'apikey': supabaseAnonKey,
+      'Authorization': `Bearer ${supabaseApiKey}`,
+      'apikey': supabaseApiKey,
       'Content-Type': 'application/json',
       'Prefer': 'return=representation',
     },
@@ -212,12 +214,23 @@ const fallbackData = {
       sort_order: 2,
     },
   ],
+  feedback: [],
   serviceAreas: [
     { id: 1, name: 'Local metro area', sort_order: 1 },
     { id: 2, name: 'Nearby suburbs', sort_order: 2 },
     { id: 3, name: 'Commercial districts', sort_order: 3 },
     { id: 4, name: 'Industrial and construction sites', sort_order: 4 },
   ],
+}
+
+type FeedbackRecord = {
+  id: number
+  name: string
+  email: string
+  rating: string
+  message: string
+  reviewed: boolean
+  created_at: string
 }
 
 // Initialize database on startup (just log status with REST API)
@@ -271,6 +284,22 @@ app.get('/api/quotes', async (_req, res) => {
   }
 })
 
+app.get('/api/admin/feedback', checkAdminAuth, async (req, res) => {
+  const password = res.locals.adminPassword as string
+  const isValid = await verifyAdminPassword(password)
+  if (!isValid) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  try {
+    const feedback = await supabaseSelect('feedback_messages', { order: 'created_at.desc' })
+    res.json({ feedback: feedback || [] })
+  } catch (error) {
+    console.error('Error fetching admin feedback:', error)
+    res.json({ feedback: fallbackData.feedback || [] })
+  }
+})
+
 app.post('/api/quotes', async (req, res) => {
   const body = req.body as Record<string, string | undefined>
   const requiredFields = ['fullName', 'phone', 'email', 'serviceType', 'propertyType', 'address', 'details']
@@ -299,8 +328,43 @@ app.post('/api/quotes', async (req, res) => {
   }
 })
 
+app.post('/api/feedback', async (req, res) => {
+  const body = req.body as Record<string, string | undefined>
+  const requiredFields = ['name', 'email', 'rating', 'message']
+  const missing = requiredFields.filter((field) => !body[field] || String(body[field]).trim().length === 0)
+
+  if (missing.length > 0) {
+    return res.status(400).json({ message: `Missing required fields: ${missing.join(', ')}` })
+  }
+
+  try {
+    await supabaseInsert('feedback_messages', {
+      name: body.name?.trim(),
+      email: body.email?.trim(),
+      rating: body.rating?.trim(),
+      message: body.message?.trim(),
+      reviewed: false,
+    })
+
+    res.status(201).json({ ok: true })
+  } catch (error) {
+    console.error('Error creating feedback:', error)
+    const fallbackList = fallbackData.feedback as FeedbackRecord[]
+    fallbackList.unshift({
+      id: Date.now(),
+      name: String(body.name || '').trim(),
+      email: String(body.email || '').trim(),
+      rating: String(body.rating || '5').trim(),
+      message: String(body.message || '').trim(),
+      reviewed: false,
+      created_at: new Date().toISOString(),
+    })
+    res.status(201).json({ ok: true, fallback: true })
+  }
+})
+
 // Admin authentication middleware
-const checkAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+function checkAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization
   const password = authHeader?.replace('Bearer ', '')
 
