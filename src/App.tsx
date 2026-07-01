@@ -31,6 +31,9 @@ function HamburgerMenu() {
           <a href="#process" onClick={() => setIsOpen(false)}>
             Process
           </a>
+          <a href="#results" onClick={() => setIsOpen(false)}>
+            Results
+          </a>
           <a href="#quote-form" onClick={() => setIsOpen(false)}>
             Quote
           </a>
@@ -70,6 +73,7 @@ type GalleryItem = {
   before_label: string
   after_label: string
   description: string
+  image?: string
 }
 
 type ServiceArea = {
@@ -95,6 +99,13 @@ type QuoteForm = {
   details: string
 }
 
+type FeedbackForm = {
+  name: string
+  email: string
+  rating: string
+  message: string
+}
+
 const initialForm: QuoteForm = {
   fullName: '',
   phone: '',
@@ -104,6 +115,13 @@ const initialForm: QuoteForm = {
   address: '',
   preferredDate: '',
   details: '',
+}
+
+const initialFeedbackForm: FeedbackForm = {
+  name: '',
+  email: '',
+  rating: '5',
+  message: '',
 }
 
 const apiBase = '/api'
@@ -137,6 +155,35 @@ const serviceIcons: Record<string, string> = {
   'Special cases': '⚡',
 }
 
+const sliderAccentColors = ['#7dd3fc', '#34d399', '#fbbf24', '#f472b6']
+const galleryImagePaths = [
+  '/gallery/furniture-removal-before.jpg',
+  '/gallery/dumpster-area-before.jpg',
+  '/gallery/mattress-removal-before.jpg',
+  '/gallery/ottoman-removal-before.jpg',
+]
+function GalleryCard({ item, accentIndex }: { item: GalleryItem; accentIndex: number }) {
+  const accent = sliderAccentColors[accentIndex % sliderAccentColors.length]
+  const imageSrc = item.image ?? galleryImagePaths[accentIndex % galleryImagePaths.length]
+
+  return (
+    <article className="gallery-card glass">
+      <div className="before-after-copy">
+        <p className="card-label">Project photo</p>
+        <h3>{item.title}</h3>
+        <p>{item.description}</p>
+      </div>
+      <div className="gallery-photo-frame">
+        <img className="gallery-photo" src={imageSrc} alt={item.title} />
+      </div>
+      <div className="gallery-caption">
+        <strong>{item.before_label} photo</strong>
+        <span>{item.after_label} result shown in the same image set</span>
+      </div>
+    </article>
+  )
+}
+
 export default function App() {
   const defaultData: SitePayload = {
     services: [
@@ -155,8 +202,24 @@ export default function App() {
       { id: 3, name: "Lisa Thompson", role: "Landlord", quote: "Reliable, punctual, and they handle the whole process from quote to completion.", rating: 5, sort_order: 3 },
     ],
     gallery: [
-      { id: 1, title: "Construction Site Cleanup", before_label: "Before", after_label: "After", description: "Complete debris removal and site preparation", sort_order: 1 },
-      { id: 2, title: "Power Washing Transformation", before_label: "Before", after_label: "After", description: "Professional exterior power washing results", sort_order: 2 },
+      {
+        id: 1,
+        title: "Furniture Removal Cleanup",
+        before_label: "Before",
+        after_label: "After",
+        description: "Couch and bulk debris removed from the property.",
+        image: '/gallery/furniture-removal-before.jpg',
+        sort_order: 1,
+      },
+      {
+        id: 2,
+        title: "Dumpster Area Cleanup",
+        before_label: "Before",
+        after_label: "After",
+        description: "Overflowing dumpster area cleared and cleaned up.",
+        image: '/gallery/dumpster-area-before.jpg',
+        sort_order: 2,
+      },
     ],
     serviceAreas: [
       { id: 1, name: "Local metro area", sort_order: 1 },
@@ -169,7 +232,9 @@ export default function App() {
   const [data, setData] = useState<SitePayload>(defaultData)
   const [loading, setLoading] = useState(false)
   const [quoteForm, setQuoteForm] = useState(initialForm)
+  const [feedbackForm, setFeedbackForm] = useState(initialFeedbackForm)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [currentPage, setCurrentPage] = useState<'home' | 'admin'>('home')
   const [heroGradient, setHeroGradient] = useState('')
   const [servicesHeadingGradient, setServicesHeadingGradient] = useState('')
@@ -313,6 +378,29 @@ export default function App() {
     setQuoteForm(initialForm)
   }
 
+  const submitFeedback = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setFeedbackStatus('saving')
+
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedbackForm),
+      })
+
+      if (!response.ok) {
+        setFeedbackStatus('error')
+        return
+      }
+
+      setFeedbackStatus('saved')
+      setFeedbackForm(initialFeedbackForm)
+    } catch {
+      setFeedbackStatus('error')
+    }
+  }
+
   // Render admin dashboard if on /admin route
   if (currentPage === 'admin') {
     return <AdminDashboard />
@@ -448,7 +536,20 @@ export default function App() {
         </section>
 
         <section id="results" className="section-block">
-          <div style={{ background: testimonialHeadingGradient, padding: '20px', borderRadius: '12px' }}>
+          <div className="section-heading" style={{ background: testimonialHeadingGradient }}>
+            <p className="eyebrow">Results</p>
+            <h2>Photos from recent cleanup jobs.</h2>
+            <p className="section-subcopy">A closer look at the work we completed on site without hiding the details.</p>
+          </div>
+          <div className="gallery-grid results-grid">
+            {data.gallery.map((item, index) => (
+              <GalleryCard key={item.id} item={item} accentIndex={index} />
+            ))}
+          </div>
+        </section>
+
+        <section id="testimonials" className="section-block">
+          <div className="section-heading" style={{ background: testimonialHeadingGradient }}>
             <p className="eyebrow">Testimonials</p>
             <h2>Clients remember the professionalism and the finish.</h2>
           </div>
@@ -546,6 +647,67 @@ export default function App() {
               </button>
               {status === 'saved' && <p className="success-text">Thanks. Your request has been saved in the database.</p>}
               {status === 'error' && <p className="error-text">Please fill out the form and try again.</p>}
+            </form>
+          </div>
+        </section>
+
+        <section id="feedback" className="section-block feedback-section">
+          <div className="section-heading">
+            <p className="eyebrow">Feedback</p>
+            <h2>Tell us how the job went.</h2>
+            <p className="section-subcopy">
+              Leave a quick note after service so we can keep improving and highlight the jobs customers remember.
+            </p>
+          </div>
+          <div className="feedback-layout">
+            <div className="glass feedback-summary">
+              <p className="card-label">Why we ask</p>
+              <p>Your feedback helps us improve crew communication, finish quality, and turnaround time.</p>
+              <div className="feedback-points">
+                <div>
+                  <strong>Clear communication</strong>
+                  <span>Tell us what was smooth and what needs work.</span>
+                </div>
+                <div>
+                  <strong>Finish quality</strong>
+                  <span>Let us know if the final walkthrough met expectations.</span>
+                </div>
+                <div>
+                  <strong>Response time</strong>
+                  <span>Share whether the quote and follow-up were fast enough.</span>
+                </div>
+              </div>
+            </div>
+            <form className="glass feedback-form" onSubmit={submitFeedback}>
+              <div className="form-grid feedback-grid">
+                <label>
+                  Your name
+                  <input value={feedbackForm.name} onChange={(e) => setFeedbackForm({ ...feedbackForm, name: e.target.value })} />
+                </label>
+                <label>
+                  Email
+                  <input value={feedbackForm.email} onChange={(e) => setFeedbackForm({ ...feedbackForm, email: e.target.value })} />
+                </label>
+                <label>
+                  Rating
+                  <select value={feedbackForm.rating} onChange={(e) => setFeedbackForm({ ...feedbackForm, rating: e.target.value })}>
+                    {[5, 4, 3, 2, 1].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating} star{rating > 1 ? 's' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="full-width">
+                  Message
+                  <textarea value={feedbackForm.message} onChange={(e) => setFeedbackForm({ ...feedbackForm, message: e.target.value })} rows={5} />
+                </label>
+              </div>
+              <button className="primary-button" type="submit" disabled={feedbackStatus === 'saving'}>
+                {feedbackStatus === 'saving' ? 'Sending...' : 'Send Feedback'}
+              </button>
+              {feedbackStatus === 'saved' && <p className="success-text">Thanks. Your feedback has been sent for review.</p>}
+              {feedbackStatus === 'error' && <p className="error-text">Please add a message and try again.</p>}
             </form>
           </div>
         </section>
