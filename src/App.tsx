@@ -738,6 +738,7 @@ export default function App() {
             <p>Email: Tw3y111@aol.com</p>
             <p>Raekwon | Owner</p>
             <p>Phone: 757-343-3512</p>
+            <p>Email: Winfield.raekwon@yahoo.com</p>
           </div>
         </section>
 
