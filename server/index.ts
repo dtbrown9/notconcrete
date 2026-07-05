@@ -86,6 +86,25 @@ async function supabaseInsert(table: string, data: Record<string, unknown>) {
   return response.json()
 }
 
+function normalizeGalleryItem(item: Record<string, unknown>) {
+  const imageUrl =
+    item.image_url ??
+    item.image ??
+    item.before_image_url ??
+    item.after_image_url ??
+    item.photo_url ??
+    item.before_image ??
+    item.after_image ??
+    item.photo ??
+    item.url ??
+    item.public_url
+
+  return {
+    ...item,
+    image_url: typeof imageUrl === 'string' ? imageUrl : undefined,
+  }
+}
+
 // Password hashing utilities
 const hashPassword = (password: string): { hash: string; salt: string } => {
   const salt = randomBytes(16).toString('hex')
@@ -258,13 +277,17 @@ app.get('/api/site', async (_req, res) => {
   try {
     const services = await supabaseSelect('services', { order: 'featured.desc,sort_order.asc' })
     const testimonials = await supabaseSelect('testimonials', { order: 'sort_order.asc' })
-    const gallery = await supabaseSelect('gallery_items', { order: 'sort_order.asc' })
+    const rawGallery = await supabaseSelect('gallery_items', { order: 'sort_order.asc' })
     const serviceAreas = await supabaseSelect('service_areas', { order: 'sort_order.asc' })
+
+    const gallery = Array.isArray(rawGallery)
+      ? rawGallery.map((item) => normalizeGalleryItem(item as Record<string, unknown>))
+      : []
 
     res.json({
       services: services || [],
       testimonials: testimonials || [],
-      gallery: gallery || [],
+      gallery,
       serviceAreas: serviceAreas || [],
     })
   } catch (error) {
