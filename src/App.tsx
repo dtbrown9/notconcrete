@@ -73,7 +73,10 @@ type GalleryItem = {
   before_label: string
   after_label: string
   description: string
-  image?: string
+  image_url?: string
+  service_name?: string
+  service_title?: string
+  section?: string
 }
 
 type ServiceArea = {
@@ -156,15 +159,117 @@ const serviceIcons: Record<string, string> = {
 }
 
 const sliderAccentColors = ['#7dd3fc', '#34d399', '#fbbf24', '#f472b6']
-const galleryImagePaths = [
-  '/gallery/furniture-removal-before.jpg',
-  '/gallery/dumpster-area-before.jpg',
-  '/gallery/mattress-removal-before.jpg',
-  '/gallery/ottoman-removal-before.jpg',
-]
+const serviceImageFallbacks: Record<string, string> = {
+  moveout: '/gallery/move-out-cleaning.jpg',
+  specialized: '/gallery/specialized-cleanup.jpg',
+  pressure: '/gallery/pressure-washing.jpg',
+}
+
+const galleryTitleImageFallbacks: Record<string, { primary: string; secondary?: string }> = {
+  'furniture removal and cleanup': { primary: '/gallery/furniture-removal-before.jpg' },
+  'dumpster area cleanup': { primary: '/gallery/dumpster-area-before.jpg' },
+  'mattress removal and debris cleanup': { primary: '/gallery/mattress-removal-before.jpg' },
+  'move-out cleaning': {
+    primary: '/gallery/move-out-cleaning-2.jpg',
+    secondary: '/gallery/move-out-cleaning.jpg',
+  },
+  'specialized cleanup': {
+    primary: '/gallery/specialized-cleanup.jpg',
+    secondary: '/gallery/specialized-cleanup-2.jpg',
+  },
+  'pressure washing': {
+    primary: '/gallery/pressure-washing.jpg',
+    secondary: '/gallery/pressure-washing-2.jpg',
+  },
+}
+
+const normalizeText = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ').trim()
+
+const resolveServiceGroup = (value: string) => {
+  const normalized = normalizeText(value)
+  if (normalized.includes('move-out') || normalized.includes('move out') || normalized.includes('move-in') || normalized.includes('move in') || normalized.includes('turnover')) {
+    return 'moveout'
+  }
+  if (normalized.includes('specialized') || normalized.includes('specialty')) {
+    return 'specialized'
+  }
+  if (normalized.includes('pressure washing') || normalized.includes('power washing')) {
+    return 'pressure'
+  }
+  return undefined
+}
+
+const getGalleryImageSource = (item: GalleryItem | undefined, serviceTitle?: string, forceLocal = false) => {
+  if (serviceTitle) {
+    const group = resolveServiceGroup(serviceTitle)
+    if (group && forceLocal) {
+      return serviceImageFallbacks[group]
+    }
+    if (group && !item?.image_url) {
+      return serviceImageFallbacks[group]
+    }
+  }
+
+  return item?.image_url
+}
+
+const getGalleryCardImages = (item: GalleryItem) => {
+  const normalizedTitle = normalizeText(item.title)
+  const fallback = galleryTitleImageFallbacks[normalizedTitle]
+
+  if (item.image_url) {
+    return { primary: item.image_url, secondary: fallback?.secondary }
+  }
+
+  return {
+    primary: fallback?.primary,
+    secondary: fallback?.secondary,
+  }
+}
+
+const findGalleryMatchForService = (serviceTitle: string, gallery: GalleryItem[], usedIds?: Set<number>) => {
+  const aliasMap: Record<string, string[]> = {
+    moveout: ['move-out cleaning', 'move out cleaning', 'move-in cleaning', 'turnover cleaning', 'move-out / before move-in cleaning'],
+    specialized: ['specialized cleanup', 'specialty services', 'special cleanup'],
+    pressure: ['pressure washing', 'power washing', 'commercial & residential power washing'],
+  }
+
+  const serviceGroup = resolveServiceGroup(serviceTitle)
+  if (!serviceGroup) {
+    return undefined
+  }
+
+  const aliases = aliasMap[serviceGroup].map((alias) => normalizeText(alias))
+
+  const exactMatch = gallery.find((item) => {
+    if (usedIds?.has(item.id)) {
+      return false
+    }
+
+    const itemTitles = [item.title, item.service_name, item.service_title, item.section]
+      .filter(Boolean)
+      .map((value) => normalizeText(String(value)))
+
+    return itemTitles.some((value) => aliases.includes(value))
+  })
+
+  if (exactMatch) {
+    return exactMatch
+  }
+
+  return gallery.find((item) => {
+    if (usedIds?.has(item.id)) {
+      return false
+    }
+
+    const haystack = normalizeText(`${item.title} ${item.description} ${item.service_name ?? ''} ${item.service_title ?? ''} ${item.section ?? ''}`)
+    return aliases.some((alias) => haystack.includes(alias))
+  })
+}
+
 function GalleryCard({ item, accentIndex }: { item: GalleryItem; accentIndex: number }) {
   const accent = sliderAccentColors[accentIndex % sliderAccentColors.length]
-  const imageSrc = item.image ?? galleryImagePaths[accentIndex % galleryImagePaths.length]
+  const { primary: imageSrc, secondary: secondImageSrc } = getGalleryCardImages(item)
 
   return (
     <article className="gallery-card glass">
@@ -174,7 +279,22 @@ function GalleryCard({ item, accentIndex }: { item: GalleryItem; accentIndex: nu
         <p>{item.description}</p>
       </div>
       <div className="gallery-photo-frame">
-        <img className="gallery-photo" src={imageSrc} alt={item.title} />
+        {imageSrc ? (
+          secondImageSrc ? (
+            <div className="gallery-photo-pair">
+              <div className="gallery-photo-frame">
+                <img className="gallery-photo" src={imageSrc} alt={`${item.title} photo 1`} />
+              </div>
+              <div className="gallery-photo-frame">
+                <img className="gallery-photo" src={secondImageSrc} alt={`${item.title} photo 2`} />
+              </div>
+            </div>
+          ) : (
+            <img className="gallery-photo" src={imageSrc} alt={item.title} />
+          )
+        ) : (
+          <div className="gallery-photo-missing">Photo not added yet</div>
+        )}
       </div>
       <div className="gallery-caption">
         <strong>{item.before_label} photo</strong>
@@ -208,7 +328,7 @@ export default function App() {
         before_label: "Before",
         after_label: "After",
         description: "Couch and bulk debris removed from the property.",
-        image: '/gallery/furniture-removal-before.jpg',
+        image_url: '/gallery/furniture-removal-before.jpg',
         sort_order: 1,
       },
       {
@@ -217,7 +337,7 @@ export default function App() {
         before_label: "Before",
         after_label: "After",
         description: "Overflowing dumpster area cleared and cleaned up.",
-        image: '/gallery/dumpster-area-before.jpg',
+        image_url: '/gallery/dumpster-area-before.jpg',
         sort_order: 2,
       },
     ],
@@ -333,6 +453,20 @@ export default function App() {
   const featuredServices = useMemo(() => data.services.filter((service) => service.featured === 1).slice(0, 4), [data])
 
   const serviceOptions = useMemo(() => data.services.map((service) => service.title), [data])
+
+  const serviceGalleryMap = useMemo(() => {
+    const map = new Map<number, GalleryItem>()
+    const usedGalleryIds = new Set<number>()
+
+    for (const service of data.services) {
+      const match = findGalleryMatchForService(service.title, data.gallery, usedGalleryIds)
+      if (match) {
+        map.set(service.id, match)
+        usedGalleryIds.add(match.id)
+      }
+    }
+    return map
+  }, [data.services, data.gallery])
 
   const serviceSummaries = useMemo(() => {
     return [
@@ -482,7 +616,10 @@ export default function App() {
             <p>Loading services...</p>
           ) : (
             <div className="service-section-list">
-              {serviceSummaries.map((group) => (
+              {serviceSummaries.map((group) => {
+                const showSectionPhotos = !['Property turnovers', 'Exterior refresh'].includes(group.label)
+
+                return (
                 <section key={group.label} className="service-group glass">
                   <div className="service-group-header">
                     <p className="service-category">{group.label}</p>
@@ -491,6 +628,20 @@ export default function App() {
                   <div className="service-grid service-grid-tight">
                     {group.items.map((service) => (
                       <article key={service.id} className="service-card service-card-organized">
+                        {showSectionPhotos && (() => {
+                          const matchedGalleryItem = serviceGalleryMap.get(service.id)
+                          const serviceImageSrc = getGalleryImageSource(matchedGalleryItem, service.title, true)
+
+                          if (!serviceImageSrc) {
+                            return null
+                          }
+
+                          return (
+                            <div className="service-photo-frame">
+                              <img className="service-photo" src={serviceImageSrc} alt={matchedGalleryItem?.title ?? service.title} />
+                            </div>
+                          )
+                        })()}
                         <h4>
                           <span className="service-icon">{serviceIcons[service.title] || '🔧'}</span>
                           {service.title}
@@ -500,7 +651,8 @@ export default function App() {
                     ))}
                   </div>
                 </section>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>
@@ -581,8 +733,11 @@ export default function App() {
           <div className="glass contact-card">
             <p className="card-label">Call for a quote</p>
             <p>We respond quickly and can handle residential, commercial, and construction cleanup requests.</p>
-            <p>Phone: (555) 123-4567</p>
-            <p>Email: quotes@notconcretecleaning.com</p>
+            <p>Tammy | Admin, Estimator</p>
+            <p>Phone: 410-905-9649</p>
+            <p>Email: Tw3y111@aol.com</p>
+            <p>Raekwon | Owner</p>
+            <p>Phone: 757-343-3512</p>
           </div>
         </section>
 

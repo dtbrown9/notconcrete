@@ -18,7 +18,7 @@ const sitePayload = {
       before_label: 'Before',
       after_label: 'After',
       description: 'Final cleanup',
-      image: '/gallery/furniture-removal-before.jpg',
+      image_url: '/gallery/furniture-removal-before.jpg',
     },
   ],
   serviceAreas: [
