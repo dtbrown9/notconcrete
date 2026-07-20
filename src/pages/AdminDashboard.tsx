@@ -25,6 +25,17 @@ type Feedback = {
   created_at: string
 }
 
+type PaymentRequest = {
+  confirmationNumber: string
+  paymentMethod: string
+  amount: string
+  note: string
+  status: string
+  adminNote: string
+  createdAt: string
+  verifiedAt: string
+}
+
 type PageView = 'login' | 'setup' | 'dashboard' | 'settings'
 
 export function AdminDashboard() {
@@ -35,11 +46,16 @@ export function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [feedback, setFeedback] = useState<Feedback[]>([])
+  const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [error, setError] = useState('')
   const [heroGradient, setHeroGradient] = useState('')
+  const [confirmationNumber, setConfirmationNumber] = useState('')
+  const [paymentAdminNote, setPaymentAdminNote] = useState('')
+  const [paymentMessage, setPaymentMessage] = useState('')
+  const [paymentError, setPaymentError] = useState('')
 
   // Settings state
   const [currentPasswordInput, setCurrentPasswordInput] = useState('')
@@ -130,11 +146,14 @@ export function AdminDashboard() {
   const fetchQuotes = async (authPassword: string) => {
     setLoading(true)
     try {
-      const [quotesResponse, feedbackResponse] = await Promise.all([
+      const [quotesResponse, feedbackResponse, paymentRequestsResponse] = await Promise.all([
         fetch('/api/admin/quotes', {
           headers: { Authorization: `Bearer ${authPassword}` },
         }),
         fetch('/api/admin/feedback', {
+          headers: { Authorization: `Bearer ${authPassword}` },
+        }),
+        fetch('/api/admin/payment-requests', {
           headers: { Authorization: `Bearer ${authPassword}` },
         }),
       ])
@@ -153,7 +172,14 @@ export function AdminDashboard() {
         setError('Failed to fetch feedback')
       }
 
-      if (quotesResponse.ok && feedbackResponse.ok) {
+      if (paymentRequestsResponse.ok) {
+        const data = await paymentRequestsResponse.json()
+        setPaymentRequests(data.paymentRequests)
+      } else {
+        setError('Failed to fetch payment requests')
+      }
+
+      if (quotesResponse.ok && feedbackResponse.ok && paymentRequestsResponse.ok) {
         setError('')
       }
     } catch (err) {
@@ -258,6 +284,52 @@ export function AdminDashboard() {
       }
     } catch (err) {
       setPasswordChangeError('Failed to change password')
+    }
+  }
+
+  const handleVerifyPaymentRequest = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setPaymentError('')
+    setPaymentMessage('')
+
+    if (!confirmationNumber.trim()) {
+      setPaymentError('Enter a confirmation number.')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/admin/payment-requests/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${password}`,
+        },
+        body: JSON.stringify({ confirmationNumber, adminNote: paymentAdminNote }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setPaymentError(data?.message || 'Failed to verify payment request')
+        return
+      }
+
+      const payload = (await response.json()) as { paymentRequest?: PaymentRequest }
+      if (payload.paymentRequest) {
+        setPaymentRequests((current) =>
+          current.map((request) =>
+            request.confirmationNumber === payload.paymentRequest?.confirmationNumber ? payload.paymentRequest! : request,
+          ),
+        )
+        setPaymentMessage(`Verified ${payload.paymentRequest.confirmationNumber}.`)
+      } else {
+        setPaymentMessage('Payment request verified.')
+      }
+
+      setConfirmationNumber('')
+      setPaymentAdminNote('')
+      await fetchQuotes(password)
+    } catch {
+      setPaymentError('Failed to verify payment request')
     }
   }
 
@@ -458,6 +530,85 @@ export function AdminDashboard() {
               <button onClick={handleExport} className="secondary-button" disabled={quotes.length === 0}>
                 Export as CSV
               </button>
+            </div>
+          </div>
+
+          <div className="admin-feedback-section" style={{ marginTop: '24px' }}>
+            <h3>Payment Records</h3>
+            <p style={{ marginTop: 0, color: '#c9d4e5' }}>
+              Stripe charges should resolve automatically. Keep the confirmation-number form below only for manual or offline payments.
+            </p>
+            <form onSubmit={handleVerifyPaymentRequest} style={{ display: 'grid', gap: '12px', maxWidth: '520px' }}>
+              <div className="form-group">
+                <label htmlFor="confirmation-number">Confirmation Number (manual/offline only)</label>
+                <input
+                  id="confirmation-number"
+                  type="text"
+                  value={confirmationNumber}
+                  onChange={(e) => setConfirmationNumber(e.target.value)}
+                  placeholder="KC-1A2B3C4D"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="payment-admin-note">Admin Note</label>
+                <textarea
+                  id="payment-admin-note"
+                  value={paymentAdminNote}
+                  onChange={(e) => setPaymentAdminNote(e.target.value)}
+                  rows={3}
+                  placeholder="Optional verification note"
+                />
+              </div>
+              {paymentError && <div className="error-text">{paymentError}</div>}
+              {paymentMessage && <div className="success-text">{paymentMessage}</div>}
+              <button type="submit" className="primary-button">
+                Verify Manual Payment
+              </button>
+            </form>
+
+            <div className="admin-table-container" style={{ marginTop: '20px' }}>
+              {paymentRequests.length === 0 ? (
+                <div className="admin-empty">No payment requests found</div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Confirmation</th>
+                      <th>Session</th>
+                      <th>Method</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Processor</th>
+                      <th>Note</th>
+                      <th>Admin Note</th>
+                      <th>Created</th>
+                      <th>Verified</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentRequests.map((request) => (
+                      <tr key={request.checkoutSessionId || request.confirmationNumber}>
+                        <td className="cell-name">{request.confirmationNumber}</td>
+                        <td className="cell-details">
+                          <span title={request.checkoutSessionId}>{request.checkoutSessionId || '—'}</span>
+                        </td>
+                        <td>{request.paymentMethod}</td>
+                        <td>{request.amount}</td>
+                        <td>{request.status}</td>
+                        <td>{request.processorStatus || '—'}</td>
+                        <td className="cell-details">
+                          <span title={request.note}>{request.note || '—'}</span>
+                        </td>
+                        <td className="cell-details">
+                          <span title={request.adminNote}>{request.adminNote || '—'}</span>
+                        </td>
+                        <td className="cell-date">{request.createdAt ? new Date(request.createdAt).toLocaleDateString() : '—'}</td>
+                        <td className="cell-date">{request.verifiedAt ? new Date(request.verifiedAt).toLocaleDateString() : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 
