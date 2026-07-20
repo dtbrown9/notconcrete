@@ -36,7 +36,7 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsIn
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
 const supabaseApiKey = supabaseServiceKey
 const require = createRequire(import.meta.url)
-const Stripe = require('stripe') as StripeConstructor
+let Stripe: StripeConstructor | null = null
 
 type StripeCheckoutSession = {
   id: string
@@ -693,6 +693,14 @@ const getStripeClient = () => {
 
   if (!stripeSecretKey) {
     throw new Error('Stripe is not configured')
+  }
+
+  if (!Stripe) {
+    try {
+      Stripe = require('stripe') as StripeConstructor
+    } catch {
+      throw new Error('Stripe is not installed')
+    }
   }
 
   return new Stripe(stripeSecretKey)
