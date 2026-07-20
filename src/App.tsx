@@ -2,15 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import './styles.css'
 import './styles-enhanced.css'
 import { AdminDashboard } from './pages/AdminDashboard'
+import { AccountDashboard } from './pages/AccountDashboard'
 import { generateSubtleGradient } from './utils/gradientGenerator'
+
+const navigateToPath = (path: string) => {
+  window.history.pushState({}, '', path)
+  window.location.reload()
+}
 
 function HamburgerMenu() {
   const [isOpen, setIsOpen] = useState(false)
-
-  const navigateTo = (path: string) => {
-    window.history.pushState({}, '', path)
-    window.location.reload()
-  }
 
   return (
     <>
@@ -40,8 +41,13 @@ function HamburgerMenu() {
           <a href="#contact" onClick={() => setIsOpen(false)}>
             Contact
           </a>
+          <a href="#account" onClick={() => {
+            navigateToPath('/account')
+          }} style={{ fontSize: '12px', opacity: '0.7' }}>
+            Account
+          </a>
           <a href="#admin" onClick={() => {
-            navigateTo('/admin')
+            navigateToPath('/admin')
           }} style={{ fontSize: '12px', opacity: '0.7' }}>
             Admin
           </a>
@@ -57,6 +63,7 @@ type Service = {
   description: string
   category: string
   featured: number
+  sort_order?: number
 }
 
 type Testimonial = {
@@ -65,6 +72,7 @@ type Testimonial = {
   role: string
   quote: string
   rating: number
+  sort_order?: number
 }
 
 type GalleryItem = {
@@ -77,11 +85,13 @@ type GalleryItem = {
   service_name?: string
   service_title?: string
   section?: string
+  sort_order?: number
 }
 
 type ServiceArea = {
   id: number
   name: string
+  sort_order?: number
 }
 
 type SitePayload = {
@@ -355,7 +365,7 @@ export default function App() {
   const [feedbackForm, setFeedbackForm] = useState(initialFeedbackForm)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [currentPage, setCurrentPage] = useState<'home' | 'admin'>('home')
+  const [currentPage, setCurrentPage] = useState<'home' | 'account' | 'admin'>('home')
   const [heroGradient, setHeroGradient] = useState('')
   const [servicesHeadingGradient, setServicesHeadingGradient] = useState('')
   const [processHeadingGradient, setProcessHeadingGradient] = useState('')
@@ -367,13 +377,21 @@ export default function App() {
     const pathname = window.location.pathname
     if (pathname === '/admin') {
       setCurrentPage('admin')
+    } else if (pathname === '/account') {
+      setCurrentPage('account')
     } else {
       setCurrentPage('home')
     }
 
     const handlePopstate = () => {
       const newPathname = window.location.pathname
-      setCurrentPage(newPathname === '/admin' ? 'admin' : 'home')
+      if (newPathname === '/admin') {
+        setCurrentPage('admin')
+      } else if (newPathname === '/account') {
+        setCurrentPage('account')
+      } else {
+        setCurrentPage('home')
+      }
     }
 
     window.addEventListener('popstate', handlePopstate)
@@ -392,44 +410,16 @@ export default function App() {
   useEffect(() => {
     const load = async () => {
       try {
-        // Try direct backend URL first (works better than proxy in dev)
         console.log('Fetching fresh data from API...')
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 5000)
-        
-        try {
-          const directRes = await fetch('http://localhost:3001/api/site', { 
-            mode: 'cors',
-            signal: controller.signal
-          })
-          clearTimeout(timeout)
-          
-          if (directRes.ok) {
-            const siteJson = (await directRes.json()) as SitePayload
-            console.log('✅ Fresh data loaded from API')
-            setData(siteJson)
-            return
-          }
-        } catch (err) {
-          clearTimeout(timeout)
-          console.log('Direct backend request failed (using fallback):', err)
-        }
-      } catch (err) {
-        console.log('Unexpected error (using fallback):', err)
-      }
-
-      try {
-        // Fallback to proxy
-        console.log('Trying proxy endpoint...')
         const proxyRes = await fetch(`${apiBase}/site`)
         if (proxyRes.ok) {
           const siteJson = (await proxyRes.json()) as SitePayload
-          console.log('✅ Fresh data loaded from proxy')
+          console.log('✅ Fresh data loaded from API')
           setData(siteJson)
           return
         }
       } catch (err) {
-        console.log('Proxy request failed (using fallback):', err)
+        console.log('API request failed (using fallback):', err)
       }
 
       console.log('Using default fallback data')
@@ -540,12 +530,16 @@ export default function App() {
     return <AdminDashboard />
   }
 
+  if (currentPage === 'account') {
+    return <AccountDashboard />
+  }
+
   return (
     <div className="page-shell">
       <header className="hero" style={{ background: heroGradient }}>
         <nav className="topbar">
           <div>
-            <p className="eyebrow">Not Concrete Cleaning Co.</p>
+            <p className="eyebrow">Kwon's Kwik Clean LLC</p>
             <h1 style={{ textAlign: 'center' }}>A cleaner, simpler way to handle construction cleanup, turnovers, and power washing.</h1>
           </div>
           <HamburgerMenu />
@@ -733,6 +727,10 @@ export default function App() {
           <div className="glass contact-card">
             <p className="card-label">Call for a quote</p>
             <p>We respond quickly and can handle residential, commercial, and construction cleanup requests.</p>
+            <p className="portal-note">Customers who want to make payments online need to create an account first.</p>
+            <button type="button" className="primary-button" onClick={() => navigateToPath('/account?mode=create')}>
+              Create an account
+            </button>
             <p>Tammy | Admin, Estimator</p>
             <p>Phone: 410-905-9649</p>
             <p>Email: Tw3y111@aol.com</p>

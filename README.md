@@ -56,6 +56,15 @@ A standalone full-stack website for a licensed, insured, state-registered, minor
 npm install
 ```
 
+### Optional Payment Redirects
+If you want the account portal to show the separate PayPal checkout button, set:
+
+```bash
+PAYPAL_CHECKOUT_URL=https://www.paypal.com/checkoutnow?token=YOUR_TOKEN
+```
+
+The portal uses this server-side redirect URL for the PayPal action and falls back to a note when it is not set.
+
 ## Running the Application
 
 ### Development Mode

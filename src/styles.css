@@ -379,6 +379,249 @@ a:hover {
   line-height: 1.5;
 }
 
+.account-page .hero {
+  margin-bottom: 20px;
+  padding: 20px;
+  position: relative;
+}
+
+.account-page .topbar {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.account-page .cta-row {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.account-page .account-header-actions {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+  justify-content: flex-end;
+}
+
+.account-layout {
+  display: grid;
+  gap: 24px;
+}
+
+.account-panel {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  min-height: 100%;
+}
+
+.account-page .section-block:first-of-type {
+  padding-bottom: 120px;
+  position: relative;
+  z-index: 1;
+}
+
+.account-page .section-block:first-of-type .account-panel {
+  position: relative;
+  z-index: 2;
+}
+
+.hero-subtitle {
+  margin: 12px 0 0;
+  color: var(--text-soft);
+  font-size: 1rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.hero-info-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  margin-top: 14px;
+}
+
+.hero-info-card,
+.portal-help-card {
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.hero-info-card strong,
+.portal-help-card strong {
+  display: block;
+  margin: 6px 0;
+  font-size: 1.05rem;
+}
+
+.hero-info-card p,
+.portal-help-card p,
+.portal-note {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.hero-info-label {
+  display: inline-flex;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9bdcff;
+}
+
+.hero-info-card-wide {
+  grid-column: 1 / -1;
+}
+
+.account-page .section-heading {
+  padding: 22px 20px;
+}
+
+.account-page .section-heading h2 {
+  font-size: 1.35rem;
+  line-height: 1.35;
+}
+
+.account-page .section-heading .eyebrow {
+  margin-bottom: 2px;
+}
+
+.account-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+
+.account-page .split-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.account-page .split-layout > * {
+  min-width: 0;
+}
+
+.portal-help-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.payment-method-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.payment-method-chip {
+  background: rgba(125, 211, 252, 0.12);
+  border-color: rgba(125, 211, 252, 0.18);
+}
+
+.portal-note {
+  font-size: 0.95rem;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.account-shortcut {
+  text-align: left;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f7fb;
+  cursor: pointer;
+}
+
+.account-shortcut:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.status-stack,
+.invoice-list,
+.download-list,
+.support-list,
+.payment-method-list,
+.billing-links {
+  display: grid;
+  gap: 10px;
+}
+
+.status-pill,
+.invoice-row,
+.download-row {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(125, 211, 252, 0.15);
+}
+
+.status-paid {
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.status-pending,
+.status-open {
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.status-overdue,
+.status-refund-requested {
+  border-color: rgba(244, 114, 182, 0.4);
+}
+
+.refund-form {
+  display: grid;
+  gap: 12px;
+}
+
+.refund-form textarea,
+.account-panel select {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.billing-links {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+@media (max-width: 720px) {
+  .account-page .hero {
+    padding: 16px;
+  }
+
+  .account-page .section-heading,
+  .account-page .account-panel {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .account-page .hero-info-grid,
+  .account-page .billing-links,
+  .account-page .shortcut-grid,
+  .account-page .portal-help-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-page .topbar {
+    gap: 12px;
+  }
+}
+
 /* Icon styling for service cards */
 .service-icon {
   display: inline-block;
@@ -674,6 +917,13 @@ a:hover {
   transition: all 0.3s ease;
 }
 
+.account-panel .primary-button {
+  align-self: start;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  min-height: 40px;
+}
+
 .primary-button::before {
   content: '';
   position: absolute;
@@ -721,19 +971,32 @@ a:hover {
 }
 
 .section-block {
-  margin-top: 20px;
-  padding: 4px 8px;
+  margin-top: 14px;
+  padding: 0 6px;
 }
 
 .section-heading {
   flex-direction: column;
-  margin-bottom: 18px;
-  padding: 60px 40px;
-  border-radius: 16px;
+  margin-bottom: 12px;
+  padding: 26px 24px;
+  border-radius: 18px;
   position: relative;
   overflow: hidden;
   backdrop-filter: blur(8px);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.account-page .section-heading {
+  padding: 22px 20px;
+}
+
+.account-page .section-heading h2 {
+  font-size: 1.35rem;
+  line-height: 1.35;
+}
+
+.account-page .section-heading .eyebrow {
+  margin-bottom: 2px;
 }
 
 .section-heading::before {
