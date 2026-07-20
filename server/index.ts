@@ -5,7 +5,6 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from '
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import dotenv from 'dotenv'
-import Stripe from 'stripe'
 import initSqlJs, { type Database } from 'sql.js'
 
 // Load environment variables from .env.local (development only)
@@ -37,6 +36,50 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsIn
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
 const supabaseApiKey = supabaseServiceKey
 const require = createRequire(import.meta.url)
+const Stripe = require('stripe') as StripeConstructor
+
+type StripeCheckoutSession = {
+  id: string
+  url?: string
+  status?: string
+  payment_status?: string
+  payment_intent?: string | { id?: string }
+  client_reference_id?: string
+  customer_details?: { email?: string }
+  amount_total?: number
+  currency?: string
+  metadata?: Record<string, unknown>
+  description?: string
+}
+
+type StripeWebhookEvent = {
+  type: string
+  data: {
+    object: StripeCheckoutSession
+  }
+}
+
+type StripeClient = {
+  customers: {
+    create(params: Record<string, unknown>): Promise<{ id: string }>
+  }
+  billingPortal: {
+    sessions: {
+      create(params: Record<string, unknown>): Promise<{ id: string; url: string }>
+    }
+  }
+  checkout: {
+    sessions: {
+      create(params: Record<string, unknown>): Promise<StripeCheckoutSession>
+      retrieve(sessionId: string): Promise<StripeCheckoutSession>
+    }
+  }
+  webhooks: {
+    constructEvent(rawBody: Buffer | string, signature: string, secret: string): StripeWebhookEvent
+  }
+}
+
+type StripeConstructor = new (secretKey: string, options?: { apiVersion?: string }) => StripeClient
 
 // Log configuration
 console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`)
@@ -839,7 +882,7 @@ const upsertStripePaymentRecord = async (record: {
   return confirmationNumber
 }
 
-const reconcileStripeCheckoutSession = async (checkoutSession: Stripe.Checkout.Session) => {
+const reconcileStripeCheckoutSession = async (checkoutSession: StripeCheckoutSession) => {
   const checkoutSessionId = checkoutSession.id
   const paymentIntentId = typeof checkoutSession.payment_intent === 'string' ? checkoutSession.payment_intent : checkoutSession.payment_intent?.id || ''
   const email = String(checkoutSession.client_reference_id || checkoutSession.customer_details?.email || checkoutSession.metadata?.email || '')
@@ -1588,7 +1631,7 @@ app.post('/api/stripe/webhook', async (req, res) => {
     const event = stripe.webhooks.constructEvent(rawBody, signature, stripeWebhookSecret)
 
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.expired') {
-      const checkoutSession = event.data.object as Stripe.Checkout.Session
+      const checkoutSession = event.data.object as StripeCheckoutSession
       const result = await reconcileStripeCheckoutSession(checkoutSession)
       res.json({ received: true, payment: result })
       return
