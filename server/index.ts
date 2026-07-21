@@ -581,9 +581,13 @@ const accountSchema = `
   CREATE TABLE IF NOT EXISTS account_refund_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_email TEXT NOT NULL,
+    payment_id TEXT NOT NULL DEFAULT '',
+    confirmation_number TEXT NOT NULL DEFAULT '',
+    amount_cents INTEGER DEFAULT 0,
     reason TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'Pending',
     admin_note TEXT NOT NULL DEFAULT '',
+    stripe_refund_id TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resolved_at TEXT NOT NULL DEFAULT ''
@@ -772,6 +776,24 @@ const ensureAccountUserSchemaCompatibility = (db: Database) => {
 
   if (!hasStripeCustomerId) {
     accountRun(db, "ALTER TABLE account_users ADD COLUMN stripe_customer_id TEXT NOT NULL DEFAULT ''")
+  }
+}
+
+const ensureRefundSchemaCompatibility = (db: Database) => {
+  const columns = accountQueryAll(db, 'PRAGMA table_info(account_refund_requests)')
+  const columnNames = columns.map((col) => String(col.name || ''))
+
+  if (!columnNames.includes('payment_id')) {
+    accountRun(db, "ALTER TABLE account_refund_requests ADD COLUMN payment_id TEXT NOT NULL DEFAULT ''")
+  }
+  if (!columnNames.includes('confirmation_number')) {
+    accountRun(db, "ALTER TABLE account_refund_requests ADD COLUMN confirmation_number TEXT NOT NULL DEFAULT ''")
+  }
+  if (!columnNames.includes('amount_cents')) {
+    accountRun(db, "ALTER TABLE account_refund_requests ADD COLUMN amount_cents INTEGER DEFAULT 0")
+  }
+  if (!columnNames.includes('stripe_refund_id')) {
+    accountRun(db, "ALTER TABLE account_refund_requests ADD COLUMN stripe_refund_id TEXT NOT NULL DEFAULT ''")
   }
 }
 
@@ -1218,6 +1240,7 @@ const initializeAccountDb = async () => {
     
     console.log('[DB] Ensuring schema compatibility...')
     ensureAccountUserSchemaCompatibility(db)
+    ensureRefundSchemaCompatibility(db)
     
     console.log('[DB] Seeding account users...')
     seedAccountUsers(db)
@@ -1921,6 +1944,7 @@ app.post('/api/account/refunds', async (req, res) => {
 
     const body = req.body as Record<string, unknown>
     const reason = normalizeBodyString(body.reason)
+    const confirmationNumber = normalizeBodyString(body.confirmationNumber)
 
     if (!reason) {
       return res.status(400).json({ message: 'Refund reason is required' })
@@ -1930,11 +1954,24 @@ app.post('/api/account/refunds', async (req, res) => {
       return res.status(400).json({ message: 'Refund reason is too long' })
     }
 
+    // If confirmation number provided, link to payment
+    let amountCents = 0
+    if (confirmationNumber) {
+      const db = await getAccountDb()
+      const payment = accountQueryOne(
+        db,
+        `SELECT amount_cents FROM account_payments WHERE confirmation_number = ${escapeSqlLiteral(confirmationNumber)} AND user_email = ${escapeSqlLiteral(email)} LIMIT 1`,
+      )
+      if (payment) {
+        amountCents = Number(payment.amount_cents || 0)
+      }
+    }
+
     // Store refund request in database
     const db = await getAccountDb()
     accountRun(
       db,
-      `INSERT INTO account_refund_requests (user_email, reason, status) VALUES (${escapeSqlLiteral(email)}, ${escapeSqlLiteral(reason)}, 'Pending')`,
+      `INSERT INTO account_refund_requests (user_email, confirmation_number, amount_cents, reason, status) VALUES (${escapeSqlLiteral(email)}, ${escapeSqlLiteral(confirmationNumber)}, ${amountCents}, ${escapeSqlLiteral(reason)}, 'Pending')`,
     )
     persistAccountDb(db)
 
@@ -1972,13 +2009,16 @@ app.get('/api/admin/refund-requests', checkAdminAuth, async (req, res) => {
     const db = await getAccountDb()
     const refunds = accountQueryAll(
       db,
-      `SELECT id, user_email, reason, status, admin_note, created_at, updated_at, resolved_at FROM account_refund_requests ORDER BY created_at DESC`,
+      `SELECT id, user_email, confirmation_number, amount_cents, reason, status, admin_note, stripe_refund_id, created_at, updated_at, resolved_at FROM account_refund_requests ORDER BY created_at DESC`,
     ) as Array<{
       id: number
       user_email: string
+      confirmation_number: string
+      amount_cents: number
       reason: string
       status: string
       admin_note: string
+      stripe_refund_id: string
       created_at: string
       updated_at: string
       resolved_at: string
@@ -2009,15 +2049,62 @@ app.post('/api/admin/refund-requests/:id/update-status', checkAdminAuth, async (
     }
 
     const db = await getAccountDb()
-    const resolvedAt = ['Approved', 'Rejected', 'Refunded'].includes(status) ? new Date().toISOString() : ''
+    
+    // Fetch refund request to get confirmation number
+    const refundRequest = accountQueryOne(
+      db,
+      `SELECT id, confirmation_number, user_email, amount_cents, stripe_refund_id FROM account_refund_requests WHERE id = ${id}`,
+    ) as { id: number; confirmation_number: string; user_email: string; amount_cents: number; stripe_refund_id: string } | null
+
+    if (!refundRequest) {
+      return res.status(404).json({ message: 'Refund request not found' })
+    }
+
+    let stripeRefundId = refundRequest.stripe_refund_id
+    let finalStatus = status
+    let errorMessage = ''
+
+    // If approving and confirmation number exists, issue Stripe refund
+    if (status === 'Approved' && refundRequest.confirmation_number && !refundRequest.stripe_refund_id) {
+      try {
+        // Get payment intent ID from the payment record
+        const payment = accountQueryOne(
+          db,
+          `SELECT payment_intent_id FROM account_payments WHERE confirmation_number = ${escapeSqlLiteral(refundRequest.confirmation_number)}`,
+        ) as { payment_intent_id: string } | null
+
+        if (payment?.payment_intent_id) {
+          const stripe = getStripeClient()
+          const refund = await stripe.refunds.create({
+            payment_intent: payment.payment_intent_id,
+            amount: refundRequest.amount_cents,
+          })
+          stripeRefundId = refund.id
+          finalStatus = 'Refunded' // Auto-mark as refunded when Stripe refund succeeds
+          console.log(`[REFUND] Stripe refund created: ${refund.id}`)
+        } else {
+          errorMessage = 'Could not find payment intent for this order'
+          finalStatus = 'Approved' // Keep as approved if Stripe call couldn't happen
+        }
+      } catch (stripeError) {
+        console.error('Stripe refund error:', stripeError)
+        errorMessage = `Failed to process refund: ${String((stripeError as any)?.message || 'Unknown error')}`
+        finalStatus = 'Approved' // Keep as approved even if Stripe fails - admin can retry
+      }
+    } else if (status === 'Approved' && refundRequest.stripe_refund_id) {
+      // Already refunded
+      finalStatus = 'Refunded'
+    }
+
+    const resolvedAt = ['Approved', 'Rejected', 'Refunded'].includes(finalStatus) ? new Date().toISOString() : ''
 
     accountRun(
       db,
-      `UPDATE account_refund_requests SET status = ${escapeSqlLiteral(status)}, admin_note = ${escapeSqlLiteral(adminNote)}, updated_at = CURRENT_TIMESTAMP, resolved_at = ${escapeSqlLiteral(resolvedAt)} WHERE id = ${id}`,
+      `UPDATE account_refund_requests SET status = ${escapeSqlLiteral(finalStatus)}, stripe_refund_id = ${escapeSqlLiteral(stripeRefundId)}, admin_note = ${escapeSqlLiteral(adminNote)}, updated_at = CURRENT_TIMESTAMP, resolved_at = ${escapeSqlLiteral(resolvedAt)} WHERE id = ${id}`,
     )
     persistAccountDb(db)
 
-    res.json({ ok: true })
+    res.json({ ok: true, status: finalStatus, stripeRefundId, error: errorMessage || undefined })
   } catch (error) {
     console.error('Error updating refund status:', error)
     res.status(500).json({ message: 'Failed to update refund status' })

@@ -39,9 +39,12 @@ type PaymentRequest = {
 type RefundRequest = {
   id: number
   user_email: string
+  confirmation_number: string
+  amount_cents: number
   reason: string
   status: string
   admin_note: string
+  stripe_refund_id: string
   created_at: string
   updated_at: string
   resolved_at: string
@@ -68,9 +71,6 @@ export function AdminDashboard() {
   const [paymentAdminNote, setPaymentAdminNote] = useState('')
   const [paymentMessage, setPaymentMessage] = useState('')
   const [paymentError, setPaymentError] = useState('')
-  const [refundEditingId, setRefundEditingId] = useState<number | null>(null)
-  const [refundEditingStatus, setRefundEditingStatus] = useState('')
-  const [refundEditingNote, setRefundEditingNote] = useState('')
   const [refundMessage, setRefundMessage] = useState('')
   const [refundError, setRefundError] = useState('')
 
@@ -314,12 +314,48 @@ export function AdminDashboard() {
     }
   }
 
-  const handleUpdateRefundStatus = async (refundId: number) => {
-    if (!refundEditingStatus.trim()) {
-      setRefundError('Select a status')
+  const handleApproveRefund = async (refundId: number, confirmationNumber: string) => {
+    setRefundError('')
+    setRefundMessage('')
+
+    if (!confirmationNumber) {
+      setRefundError('Cannot approve: no payment associated with this refund')
       return
     }
 
+    try {
+      const response = await fetch(`/api/admin/refund-requests/${refundId}/update-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${password}`,
+        },
+        body: JSON.stringify({
+          status: 'Approved',
+          adminNote: 'Refund approved and issued',
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setRefundError(data?.message || 'Failed to approve refund')
+        return
+      }
+
+      const result = await response.json()
+      if (result.error) {
+        setRefundError(`Refund approved but warning: ${result.error}`)
+      } else {
+        setRefundMessage(`✓ Refund issued successfully${result.stripeRefundId ? ` (ID: ${result.stripeRefundId})` : ''}`)
+      }
+      await fetchQuotes(password)
+      setTimeout(() => setRefundMessage(''), 5000)
+    } catch (err) {
+      setRefundError('Failed to approve refund')
+    }
+  }
+
+  const handleRejectRefund = async (refundId: number) => {
     setRefundError('')
     setRefundMessage('')
 
@@ -331,25 +367,22 @@ export function AdminDashboard() {
           Authorization: `Bearer ${password}`,
         },
         body: JSON.stringify({
-          status: refundEditingStatus,
-          adminNote: refundEditingNote,
+          status: 'Rejected',
+          adminNote: 'Refund rejected',
         }),
       })
 
       if (!response.ok) {
         const data = await response.json().catch(() => null)
-        setRefundError(data?.message || 'Failed to update refund status')
+        setRefundError(data?.message || 'Failed to reject refund')
         return
       }
 
-      setRefundMessage('Refund status updated successfully')
-      setRefundEditingId(null)
-      setRefundEditingStatus('')
-      setRefundEditingNote('')
+      setRefundMessage('Refund rejected')
       await fetchQuotes(password)
       setTimeout(() => setRefundMessage(''), 3000)
     } catch (err) {
-      setRefundError('Failed to update refund status')
+      setRefundError('Failed to reject refund')
     }
   }
 
@@ -799,12 +832,11 @@ export function AdminDashboard() {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Customer Email</th>
+                      <th>Customer</th>
+                      <th>Amount</th>
                       <th>Reason</th>
                       <th>Status</th>
-                      <th>Admin Note</th>
                       <th>Created</th>
-                      <th>Resolved</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -812,78 +844,54 @@ export function AdminDashboard() {
                     {refundRequests.map((refund) => (
                       <tr key={refund.id}>
                         <td className="cell-email">
-                          <a href={`mailto:${refund.user_email}`}>{refund.user_email}</a>
-                        </td>
-                        <td className="cell-details">
-                          <span title={refund.reason}>{refund.reason.substring(0, 80)}...</span>
+                          <div>
+                            <a href={`mailto:${refund.user_email}`}>{refund.user_email}</a>
+                            {refund.confirmation_number && (
+                              <p style={{ fontSize: '0.85em', margin: '4px 0 0 0', opacity: '0.7' }}>
+                                Order: {refund.confirmation_number}
+                              </p>
+                            )}
+                          </div>
                         </td>
                         <td>
-                          {refundEditingId === refund.id ? (
-                            <select
-                              value={refundEditingStatus}
-                              onChange={(e) => setRefundEditingStatus(e.target.value)}
-                              style={{ padding: '4px', borderRadius: '4px' }}
-                            >
-                              <option value="">— Select status —</option>
-                              <option value="Pending">Pending</option>
-                              <option value="Approved">Approved</option>
-                              <option value="Rejected">Rejected</option>
-                              <option value="Refunded">Refunded</option>
-                            </select>
+                          {refund.amount_cents > 0 ? `$${(refund.amount_cents / 100).toFixed(2)}` : '—'}
+                        </td>
+                        <td className="cell-details">
+                          <span title={refund.reason}>{refund.reason.substring(0, 60)}...</span>
+                        </td>
+                        <td>
+                          {refund.status === 'Refunded' ? (
+                            <span style={{ color: '#4ade80', fontWeight: 'bold' }}>✓ Refunded</span>
+                          ) : refund.status === 'Rejected' ? (
+                            <span style={{ color: '#ef4444' }}>✗ Rejected</span>
                           ) : (
                             <span>{refund.status}</span>
                           )}
                         </td>
-                        <td className="cell-details">
-                          {refundEditingId === refund.id ? (
-                            <textarea
-                              value={refundEditingNote}
-                              onChange={(e) => setRefundEditingNote(e.target.value)}
-                              rows={2}
-                              placeholder="Add note"
-                              style={{ width: '100%', padding: '4px', borderRadius: '4px' }}
-                            />
-                          ) : (
-                            <span title={refund.admin_note}>{refund.admin_note || '—'}</span>
-                          )}
-                        </td>
                         <td className="cell-date">{new Date(refund.created_at).toLocaleDateString()}</td>
-                        <td className="cell-date">{refund.resolved_at ? new Date(refund.resolved_at).toLocaleDateString() : '—'}</td>
                         <td className="cell-actions">
-                          {refundEditingId === refund.id ? (
+                          {refund.status === 'Pending' ? (
                             <div style={{ display: 'flex', gap: '4px' }}>
                               <button
-                                onClick={() => handleUpdateRefundStatus(refund.id)}
+                                onClick={() => handleApproveRefund(refund.id, refund.confirmation_number)}
                                 className="primary-button"
                                 style={{ padding: '4px 8px', fontSize: '12px' }}
+                                title="Approve refund and issue to customer"
                               >
-                                Save
+                                Approve
                               </button>
                               <button
-                                onClick={() => {
-                                  setRefundEditingId(null)
-                                  setRefundEditingStatus('')
-                                  setRefundEditingNote('')
-                                  setRefundError('')
-                                }}
+                                onClick={() => handleRejectRefund(refund.id)}
                                 className="secondary-button"
                                 style={{ padding: '4px 8px', fontSize: '12px' }}
                               >
-                                Cancel
+                                Reject
                               </button>
                             </div>
+                          ) : refund.status === 'Refunded' ? (
+                            <span style={{ fontSize: '12px', opacity: '0.7' }}>Done</span>
                           ) : (
-                            <button
-                              onClick={() => {
-                                setRefundEditingId(refund.id)
-                                setRefundEditingStatus(refund.status)
-                                setRefundEditingNote(refund.admin_note)
-                              }}
-                              className="secondary-button"
-                              style={{ padding: '4px 8px', fontSize: '12px' }}
-                            >
-                              Edit
-                            </button>
+                            <span style={{ fontSize: '12px', opacity: '0.7' }}>{refund.status}</span>
                           )}
                         </td>
                       </tr>
