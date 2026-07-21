@@ -96,7 +96,7 @@ const defaultReceiptItems: ReceiptItem[] = [
   { id: 'rec-2', label: 'Receipt for pressure washing', createdAt: '2026-06-20' },
 ]
 
-const paymentHighlights = ['Debit card', 'Credit card', 'ACH Transfer', 'Apple Pay', 'Google Pay']
+const paymentHighlights = ['Debit card', 'Credit card', 'ACH Transfer', 'Apple Pay', 'Google Pay', 'Cash App', 'Amazon Pay']
 
 const defaultShortcutItems = ['Pay invoice', 'Request refund', 'Contact admin', 'Update payment method']
 
