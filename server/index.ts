@@ -1552,6 +1552,11 @@ app.patch('/api/account/password', async (req, res) => {
 
 app.get('/api/account/me', async (req, res) => {
   try {
+    // Prevent browser caching for account data - always return fresh
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
+    
     const email = await getAuthorizedAccountEmail(req)
 
     if (!email) {
@@ -1585,6 +1590,11 @@ app.get('/api/account/payment-requests', async (req, res) => {
 
 app.get('/api/account/invoices', async (req, res) => {
   try {
+    // Prevent browser caching for invoice data - always return fresh
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
+    
     const email = await getAuthorizedAccountEmail(req)
 
     if (!email) {
