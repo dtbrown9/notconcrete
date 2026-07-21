@@ -7,6 +7,8 @@ import path from 'node:path'
 import dotenv from 'dotenv'
 import initSqlJs, { type Database } from 'sql.js'
 
+const require = createRequire(import.meta.url)
+
 // Load environment variables from .env.local (development only)
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config({ path: '.env.local' })
@@ -29,6 +31,7 @@ app.use(
   }),
 )
 app.use(express.urlencoded({ extended: false, limit: '1mb' }))
+app.use(cors({ origin: '*', credentials: false }))
 
 // Supabase configuration
 const supabaseUrl = 'https://nbkahtpyukqojfbumcwz.supabase.co'
@@ -616,7 +619,15 @@ const accountQueryAll = (db: Database, sql: string) => {
 }
 
 const accountRun = (db: Database, sql: string, params: unknown[] = []) => {
-  db.exec(sql)
+  try {
+    const results = db.exec(sql)
+    // For INSERT/UPDATE/DELETE, exec returns empty array, which is fine
+    // Just ensure the statement executed without throwing
+    return results.length > 0 ? results[0] : null
+  } catch (error) {
+    console.error('accountRun error:', sql, error)
+    throw error
+  }
 }
 
 const escapeSqlLiteral = (value: string) => `'${value.replace(/'/g, "''")}'`
@@ -703,21 +714,37 @@ const getPaymentReturnUrl = (sessionIdPlaceholder: string, result: 'success' | '
 }
 
 const persistAccountDb = (db: Database) => {
-  writeFileSync(accountDbPath, Buffer.from(db.export()))
+  try {
+    const exported = Buffer.from(db.export())
+    console.log(`[DB] Persisting account database: ${exported.length} bytes`)
+    if (exported.length < 100) {
+      console.warn('[DB WARNING] Database export is very small - may indicate seeding failed!')
+    }
+    writeFileSync(accountDbPath, exported)
+  } catch (error) {
+    console.error('[DB ERROR] Failed to persist account database:', error)
+    throw error
+  }
 }
 
 const seedAccountUsers = (db: Database) => {
+  let insertedCount = 0
   for (const user of accountUserSeeds) {
     const email = normalizeAccountEmail(user.email)
     const existing = accountQueryOne(db, `SELECT email FROM account_users WHERE email = ${escapeSqlLiteral(email)} LIMIT 1`)
 
     if (existing) {
+      console.log(`[DB] User already exists: ${email}`)
       continue
     }
 
     const { hash, salt } = hashPassword(user.password)
-    accountRun(db, `INSERT INTO account_users (email, display_name, password_hash, password_salt) VALUES (${escapeSqlLiteral(email)}, ${escapeSqlLiteral(user.displayName)}, ${escapeSqlLiteral(hash)}, ${escapeSqlLiteral(salt)})`)
+    const sql = `INSERT INTO account_users (email, display_name, password_hash, password_salt) VALUES (${escapeSqlLiteral(email)}, ${escapeSqlLiteral(user.displayName)}, ${escapeSqlLiteral(hash)}, ${escapeSqlLiteral(salt)})`
+    accountRun(db, sql)
+    insertedCount++
+    console.log(`[DB] Seeded user: ${email}`)
   }
+  console.log(`[DB] Seeded ${insertedCount} account users`)
 }
 
 const createAccountUser = async (email: string, displayName: string, password: string) => {
@@ -1178,24 +1205,57 @@ const verifyPaymentRequest = async (confirmationNumber: string, adminNote: strin
 }
 
 const initializeAccountDb = async () => {
-  const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm')
-  const SQL = await initSqlJs({ locateFile: () => wasmPath })
-  const db = existsSync(accountDbPath) ? new SQL.Database(readFileSync(accountDbPath)) : new SQL.Database()
+  try {
+    const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm')
+    const SQL = await initSqlJs({ locateFile: () => wasmPath })
+    const dbExists = existsSync(accountDbPath)
+    console.log(`[DB] Initializing account database (exists: ${dbExists})`)
+    
+    const db = dbExists ? new SQL.Database(readFileSync(accountDbPath)) : new SQL.Database()
 
-  db.exec(accountSchema)
-  ensureAccountUserSchemaCompatibility(db)
-  seedAccountUsers(db)
-  persistAccountDb(db)
+    console.log('[DB] Executing schema...')
+    db.exec(accountSchema)
+    
+    console.log('[DB] Ensuring schema compatibility...')
+    ensureAccountUserSchemaCompatibility(db)
+    
+    console.log('[DB] Seeding account users...')
+    seedAccountUsers(db)
+    
+    console.log('[DB] Persisting database...')
+    persistAccountDb(db)
 
-  return db
+    console.log('[DB] Database initialization complete')
+    return db
+  } catch (error) {
+    console.error('[DB INIT ERROR]', error)
+    throw error
+  }
 }
 
 const getAccountDb = async () => {
-  if (!accountDbPromise) {
-    accountDbPromise = initializeAccountDb()
-  }
+  try {
+    if (!accountDbPromise) {
+      accountDbPromise = initializeAccountDb()
+    }
 
-  return accountDbPromise
+    const db = await accountDbPromise
+    
+    // Verify and re-seed if needed
+    const userCount = accountQueryAll(db, 'SELECT COUNT(*) as count FROM account_users')
+    const count = userCount.length > 0 ? (userCount[0].count as number) : 0
+    
+    if (count === 0) {
+      console.log('[DB] No users found, re-seeding account users...')
+      seedAccountUsers(db)
+      persistAccountDb(db)
+    }
+    
+    return db
+  } catch (error) {
+    console.error('[DB GET ERROR]', error)
+    throw error
+  }
 }
 
 const getFallbackAccountProfile = (email: string) => {
@@ -1432,29 +1492,34 @@ app.get('/api/account', async (req, res) => {
 })
 
 app.post('/api/account/sign-in', async (req, res) => {
-  const body = req.body as Record<string, unknown>
-  const email = String(body.email || '').trim().toLowerCase()
-  const password = String(body.password || '').trim()
+  try {
+    const body = req.body as Record<string, unknown>
+    const email = String(body.email || '').trim().toLowerCase()
+    const password = String(body.password || '').trim()
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required' })
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' })
+    }
+
+    const user = await getAccountUser(email)
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password' })
+    }
+
+    const isValid = verifyPassword(password, user.password_hash, user.password_salt)
+
+    if (!isValid) {
+      return res.status(401).json({ message: 'Invalid email or password' })
+    }
+
+    const token = await createAccountSession(email)
+
+    res.json({ ok: true, token, accountEmail: email })
+  } catch (error) {
+    console.error('[SIGN-IN ERROR]', error)
+    res.status(500).json({ message: 'Server error during sign-in' })
   }
-
-  const user = await getAccountUser(email)
-
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid email or password' })
-  }
-
-  const isValid = verifyPassword(password, user.password_hash, user.password_salt)
-
-  if (!isValid) {
-    return res.status(401).json({ message: 'Invalid email or password' })
-  }
-
-  const token = await createAccountSession(email)
-
-  res.json({ ok: true, token, accountEmail: email })
 })
 
 app.post('/api/account/sign-up', async (req, res) => {
