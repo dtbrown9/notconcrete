@@ -97,7 +97,7 @@ const defaultReceiptItems: ReceiptItem[] = [
 
 const paymentHighlights = ['Debit card', 'Credit card', 'ACH Transfer', 'Apple Pay', 'Google Pay']
 
-const defaultShortcutItems = ['Pay invoice', 'Download receipt', 'Request refund', 'Contact admin', 'Update payment method']
+const defaultShortcutItems = ['Pay invoice', 'Request refund', 'Contact admin', 'Update payment method']
 
 const defaultSupportContacts = [
   { label: 'Admin support email', value: 'Tw3y111@aol.com' },
@@ -166,7 +166,7 @@ export function AccountDashboard() {
   const [paymentItems, setPaymentItems] = useState(defaultPaymentItems)
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([])
   const [invoiceItems, setInvoiceItems] = useState<Array<{ id: string; number: string; total: string; status: 'Open' | 'Paid' | 'Refund requested'; url?: string; createdAt?: string }>>([])
-  const [receiptItems, setReceiptItems] = useState(defaultReceiptItems)
+  const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([])
   const [supportContacts, setSupportContacts] = useState(defaultSupportContacts)
   const [language, setLanguage] = useState('English')
   const [timeZone, setTimeZone] = useState('Eastern Time')
@@ -663,12 +663,7 @@ export function AccountDashboard() {
       return
     }
 
-    if (item === 'Download receipt') {
-      scrollToSection('receipts')
-      const receiptDownloadButton = document.querySelector<HTMLButtonElement>('#receipts .secondary-button')
-      receiptDownloadButton?.focus()
-      return
-    }
+
 
     if (item === 'Request refund') {
       scrollToSection('support-refunds')
@@ -935,21 +930,6 @@ export function AccountDashboard() {
                   ))}
                 </div>
               </div>
-
-              <div id="receipts" className="glass account-panel">
-                <h3 className="card-label">Receipt downloads</h3>
-                <div className="download-list">
-                  {receiptItems.map((receipt) => (
-                    <article key={receipt.id} className="download-row">
-                      <strong>{receipt.label}</strong>
-                      <span>{receipt.createdAt}</span>
-                      <button type="button" className="secondary-button" onClick={() => downloadTextFile(`${receipt.id}.txt`, `${receipt.label}\nDate: ${receipt.createdAt}`)}>
-                        Download
-                      </button>
-                    </article>
-                  ))}
-                </div>
-              </div>
             </section>
 
             <section className="section-block split-layout">
@@ -960,11 +940,6 @@ export function AccountDashboard() {
                   Manage payment methods
                 </button>
                 {paymentMethodMessage && <p className="portal-note">{paymentMethodMessage}</p>}
-                <div className="payment-method-list">
-                  <span className="badge">Visa ending in 4242</span>
-                  <span className="badge">Bank transfer</span>
-                  <span className="badge">Cash on arrival</span>
-                </div>
               </div>
 
               <div id="support-refunds" className="glass account-panel">
