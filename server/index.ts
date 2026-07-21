@@ -2184,6 +2184,13 @@ if (path.join(process.cwd(), 'dist', 'client')) {
 export { app }
 
 if (!isTestEnvironment) {
+  // Log environment variable status for debugging
+  console.log('[Server Startup] Environment Variables Status:')
+  console.log(`  STRIPE_SECRET_KEY: ${process.env.STRIPE_SECRET_KEY ? '✓ SET' : '✗ MISSING'}`)
+  console.log(`  STRIPE_WEBHOOK_SECRET: ${process.env.STRIPE_WEBHOOK_SECRET ? '✓ SET' : '✗ MISSING'}`)
+  console.log(`  PAYPAL_CHECKOUT_URL: ${process.env.PAYPAL_CHECKOUT_URL ? '✓ SET' : '✗ MISSING'}`)
+  console.log(`  NODE_ENV: ${process.env.NODE_ENV}`)
+  
   app.listen(port, () => {
     console.log(`Not Concrete Cleaning Co. API running on http://localhost:${port}`)
   })
