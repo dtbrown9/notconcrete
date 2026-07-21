@@ -1064,7 +1064,7 @@ const createStripeCheckoutSession = async (email: string, amountInput: string, n
     customer: stripeCustomerId,
     success_url: getPaymentReturnUrl('{CHECKOUT_SESSION_ID}', 'success', origin),
     cancel_url: getPaymentReturnUrl('{CHECKOUT_SESSION_ID}', 'cancel', origin),
-    payment_method_types: ['card', 'us_bank_account', 'link'],
+    payment_method_types: ['card', 'us_bank_account', 'link', 'cashapp', 'amazon_pay'],
     line_items: [
       {
         quantity: 1,
