@@ -3,6 +3,8 @@ import './styles.css'
 import './styles-enhanced.css'
 import { AdminDashboard } from './pages/AdminDashboard'
 import { AccountDashboard } from './pages/AccountDashboard'
+import TermsOfService from './pages/TermsOfService'
+import PrivacyPolicy from './pages/PrivacyPolicy'
 import { generateSubtleGradient } from './utils/gradientGenerator'
 
 const navigateToPath = (path: string) => {
@@ -50,6 +52,16 @@ function HamburgerMenu() {
             navigateToPath('/admin')
           }} style={{ fontSize: '12px', opacity: '0.7' }}>
             Admin
+          </a>
+          <a href="#terms" onClick={() => {
+            navigateToPath('/terms')
+          }} style={{ fontSize: '11px', opacity: '0.6' }}>
+            Terms of Service
+          </a>
+          <a href="#privacy" onClick={() => {
+            navigateToPath('/privacy')
+          }} style={{ fontSize: '11px', opacity: '0.6' }}>
+            Privacy Policy
           </a>
         </div>
       )}
@@ -379,6 +391,10 @@ export default function App() {
       setCurrentPage('admin')
     } else if (pathname === '/account') {
       setCurrentPage('account')
+    } else if (pathname === '/terms') {
+      setCurrentPage('terms')
+    } else if (pathname === '/privacy') {
+      setCurrentPage('privacy')
     } else {
       setCurrentPage('home')
     }
@@ -389,6 +405,10 @@ export default function App() {
         setCurrentPage('admin')
       } else if (newPathname === '/account') {
         setCurrentPage('account')
+      } else if (newPathname === '/terms') {
+        setCurrentPage('terms')
+      } else if (newPathname === '/privacy') {
+        setCurrentPage('privacy')
       } else {
         setCurrentPage('home')
       }
@@ -532,6 +552,14 @@ export default function App() {
 
   if (currentPage === 'account') {
     return <AccountDashboard />
+  }
+
+  if (currentPage === 'terms') {
+    return <TermsOfService />
+  }
+
+  if (currentPage === 'privacy') {
+    return <PrivacyPolicy />
   }
 
   return (
@@ -865,6 +893,35 @@ export default function App() {
             </form>
           </div>
         </section>
+
+        <footer className="site-footer">
+          <div className="footer-content">
+            <div className="footer-section">
+              <h3>Kwon's Kwik Clean LLC</h3>
+              <p>Licensed, insured, state-registered, and minority owned.</p>
+            </div>
+            <div className="footer-section">
+              <h4>Quick Links</h4>
+              <ul>
+                <li><a href="#services">Services</a></li>
+                <li><a href="#contact">Contact</a></li>
+                <li><a href="#account" onClick={() => navigateToPath('/account')} style={{ cursor: 'pointer' }}>Account</a></li>
+              </ul>
+            </div>
+            <div className="footer-section">
+              <h4>Legal</h4>
+              <ul>
+                <li><a href="#terms" onClick={() => navigateToPath('/terms')} style={{ cursor: 'pointer' }}>Terms of Service</a></li>
+                <li><a href="#privacy" onClick={() => navigateToPath('/privacy')} style={{ cursor: 'pointer' }}>Privacy Policy</a></li>
+              </ul>
+            </div>
+            <div className="footer-section">
+              <h4>Contact</h4>
+              <p>Email: support@kwonsquikclean.com</p>
+              <p style={{ fontSize: '0.9em', opacity: '0.7', marginTop: '10px' }}>© 2026 Kwon's Kwik Clean LLC. All rights reserved.</p>
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
   )
