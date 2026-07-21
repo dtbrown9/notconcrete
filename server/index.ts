@@ -621,7 +621,7 @@ const accountSchema = `
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     confirmed_at TEXT NOT NULL DEFAULT ''
-  };
+  );
 
   CREATE INDEX IF NOT EXISTS idx_account_sessions_user_email ON account_sessions(user_email);
   CREATE INDEX IF NOT EXISTS idx_account_payment_requests_user_email ON account_payment_requests(user_email);
