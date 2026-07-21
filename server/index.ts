@@ -607,12 +607,24 @@ const accountSchema = `
     confirmed_at TEXT NOT NULL DEFAULT ''
   );
 
+  CREATE TABLE IF NOT EXISTS account_refund_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Pending',
+    admin_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TEXT NOT NULL DEFAULT ''
+  );
+
   CREATE INDEX IF NOT EXISTS idx_account_sessions_user_email ON account_sessions(user_email);
   CREATE INDEX IF NOT EXISTS idx_account_payment_requests_user_email ON account_payment_requests(user_email);
   CREATE INDEX IF NOT EXISTS idx_account_payment_requests_confirmation_number ON account_payment_requests(confirmation_number);
   CREATE INDEX IF NOT EXISTS idx_account_payments_user_email ON account_payments(user_email);
   CREATE INDEX IF NOT EXISTS idx_account_payments_confirmation_number ON account_payments(confirmation_number);
   CREATE INDEX IF NOT EXISTS idx_account_payments_checkout_session_id ON account_payments(checkout_session_id);
+  CREATE INDEX IF NOT EXISTS idx_account_refund_requests_user_email ON account_refund_requests(user_email);
 `
 
 const accountQueryOne = (db: Database, sql: string, params: unknown[] = []) => {
@@ -1808,18 +1820,36 @@ app.post('/api/admin/payment-requests/verify', checkAdminAuth, async (req, res) 
 })
 
 app.post('/api/account/refunds', async (req, res) => {
-  const body = req.body as Record<string, unknown>
-  const reason = normalizeBodyString(body.reason)
+  try {
+    const email = await getAuthorizedAccountEmail(req)
+    if (!email) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
 
-  if (!reason) {
-    return res.status(400).json({ message: 'Refund reason is required' })
+    const body = req.body as Record<string, unknown>
+    const reason = normalizeBodyString(body.reason)
+
+    if (!reason) {
+      return res.status(400).json({ message: 'Refund reason is required' })
+    }
+
+    if (reason.length > 2000) {
+      return res.status(400).json({ message: 'Refund reason is too long' })
+    }
+
+    // Store refund request in database
+    const db = await getAccountDb()
+    accountRun(
+      db,
+      `INSERT INTO account_refund_requests (user_email, reason, status) VALUES (${escapeSqlLiteral(email)}, ${escapeSqlLiteral(reason)}, 'Pending')`,
+    )
+    persistAccountDb(db)
+
+    res.status(201).json({ ok: true, refundStatus: 'Under review' })
+  } catch (error) {
+    console.error('Error processing refund request:', error)
+    res.status(500).json({ message: 'Failed to process refund request' })
   }
-
-  if (reason.length > 2000) {
-    return res.status(400).json({ message: 'Refund reason is too long' })
-  }
-
-  res.status(201).json({ ok: true, refundStatus: 'Under review' })
 })
 
 app.get('/api/admin/feedback', checkAdminAuth, async (req, res) => {
@@ -1835,6 +1865,69 @@ app.get('/api/admin/feedback', checkAdminAuth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching admin feedback:', error)
     res.json({ feedback: fallbackData.feedback || [] })
+  }
+})
+
+app.get('/api/admin/refund-requests', checkAdminAuth, async (req, res) => {
+  try {
+    const password = res.locals.adminPassword as string
+    const isValid = await verifyAdminPassword(password)
+    if (!isValid) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const db = await getAccountDb()
+    const refunds = accountQueryAll(
+      db,
+      `SELECT id, user_email, reason, status, admin_note, created_at, updated_at, resolved_at FROM account_refund_requests ORDER BY created_at DESC`,
+    ) as Array<{
+      id: number
+      user_email: string
+      reason: string
+      status: string
+      admin_note: string
+      created_at: string
+      updated_at: string
+      resolved_at: string
+    }>
+
+    res.json({ refunds })
+  } catch (error) {
+    console.error('Error fetching refund requests:', error)
+    res.status(500).json({ message: 'Failed to fetch refund requests' })
+  }
+})
+
+app.post('/api/admin/refund-requests/:id/update-status', checkAdminAuth, async (req, res) => {
+  try {
+    const password = res.locals.adminPassword as string
+    const isValid = await verifyAdminPassword(password)
+    if (!isValid) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const { id } = req.params
+    const body = req.body as Record<string, unknown>
+    const status = normalizeBodyString(body.status as string)
+    const adminNote = normalizeBodyString(body.adminNote as string)
+
+    if (!['Pending', 'Approved', 'Rejected', 'Refunded'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' })
+    }
+
+    const db = await getAccountDb()
+    const resolvedAt = ['Approved', 'Rejected', 'Refunded'].includes(status) ? new Date().toISOString() : ''
+
+    accountRun(
+      db,
+      `UPDATE account_refund_requests SET status = ${escapeSqlLiteral(status)}, admin_note = ${escapeSqlLiteral(adminNote)}, updated_at = CURRENT_TIMESTAMP, resolved_at = ${escapeSqlLiteral(resolvedAt)} WHERE id = ${id}`,
+    )
+    persistAccountDb(db)
+
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('Error updating refund status:', error)
+    res.status(500).json({ message: 'Failed to update refund status' })
   }
 })
 
