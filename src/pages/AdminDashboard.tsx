@@ -36,6 +36,17 @@ type PaymentRequest = {
   verifiedAt: string
 }
 
+type RefundRequest = {
+  id: number
+  user_email: string
+  reason: string
+  status: string
+  admin_note: string
+  created_at: string
+  updated_at: string
+  resolved_at: string
+}
+
 type PageView = 'login' | 'setup' | 'dashboard' | 'settings'
 
 export function AdminDashboard() {
@@ -47,6 +58,7 @@ export function AdminDashboard() {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([])
+  const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -56,6 +68,11 @@ export function AdminDashboard() {
   const [paymentAdminNote, setPaymentAdminNote] = useState('')
   const [paymentMessage, setPaymentMessage] = useState('')
   const [paymentError, setPaymentError] = useState('')
+  const [refundEditingId, setRefundEditingId] = useState<number | null>(null)
+  const [refundEditingStatus, setRefundEditingStatus] = useState('')
+  const [refundEditingNote, setRefundEditingNote] = useState('')
+  const [refundMessage, setRefundMessage] = useState('')
+  const [refundError, setRefundError] = useState('')
 
   // Settings state
   const [currentPasswordInput, setCurrentPasswordInput] = useState('')
@@ -146,7 +163,7 @@ export function AdminDashboard() {
   const fetchQuotes = async (authPassword: string) => {
     setLoading(true)
     try {
-      const [quotesResponse, feedbackResponse, paymentRequestsResponse] = await Promise.all([
+      const [quotesResponse, feedbackResponse, paymentRequestsResponse, refundRequestsResponse] = await Promise.all([
         fetch('/api/admin/quotes', {
           headers: { Authorization: `Bearer ${authPassword}` },
         }),
@@ -154,6 +171,9 @@ export function AdminDashboard() {
           headers: { Authorization: `Bearer ${authPassword}` },
         }),
         fetch('/api/admin/payment-requests', {
+          headers: { Authorization: `Bearer ${authPassword}` },
+        }),
+        fetch('/api/admin/refund-requests', {
           headers: { Authorization: `Bearer ${authPassword}` },
         }),
       ])
@@ -179,7 +199,14 @@ export function AdminDashboard() {
         setError('Failed to fetch payment requests')
       }
 
-      if (quotesResponse.ok && feedbackResponse.ok && paymentRequestsResponse.ok) {
+      if (refundRequestsResponse.ok) {
+        const data = await refundRequestsResponse.json()
+        setRefundRequests(data.refunds || [])
+      } else {
+        setError('Failed to fetch refund requests')
+      }
+
+      if (quotesResponse.ok && feedbackResponse.ok && paymentRequestsResponse.ok && refundRequestsResponse.ok) {
         setError('')
       }
     } catch (err) {
@@ -284,6 +311,45 @@ export function AdminDashboard() {
       }
     } catch (err) {
       setPasswordChangeError('Failed to change password')
+    }
+  }
+
+  const handleUpdateRefundStatus = async (refundId: number) => {
+    if (!refundEditingStatus.trim()) {
+      setRefundError('Select a status')
+      return
+    }
+
+    setRefundError('')
+    setRefundMessage('')
+
+    try {
+      const response = await fetch(`/api/admin/refund-requests/${refundId}/update-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${password}`,
+        },
+        body: JSON.stringify({
+          status: refundEditingStatus,
+          adminNote: refundEditingNote,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setRefundError(data?.message || 'Failed to update refund status')
+        return
+      }
+
+      setRefundMessage('Refund status updated successfully')
+      setRefundEditingId(null)
+      setRefundEditingStatus('')
+      setRefundEditingNote('')
+      await fetchQuotes(password)
+      setTimeout(() => setRefundMessage(''), 3000)
+    } catch (err) {
+      setRefundError('Failed to update refund status')
     }
   }
 
@@ -722,6 +788,112 @@ export function AdminDashboard() {
                 </table>
               </div>
             )}
+          </div>
+
+          <div className="admin-feedback-section" style={{ marginTop: '32px' }}>
+            <h3>Refund Requests</h3>
+            {refundRequests.length === 0 ? (
+              <div className="admin-empty">No refund requests</div>
+            ) : (
+              <div className="admin-table-container">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Customer Email</th>
+                      <th>Reason</th>
+                      <th>Status</th>
+                      <th>Admin Note</th>
+                      <th>Created</th>
+                      <th>Resolved</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refundRequests.map((refund) => (
+                      <tr key={refund.id}>
+                        <td className="cell-email">
+                          <a href={`mailto:${refund.user_email}`}>{refund.user_email}</a>
+                        </td>
+                        <td className="cell-details">
+                          <span title={refund.reason}>{refund.reason.substring(0, 80)}...</span>
+                        </td>
+                        <td>
+                          {refundEditingId === refund.id ? (
+                            <select
+                              value={refundEditingStatus}
+                              onChange={(e) => setRefundEditingStatus(e.target.value)}
+                              style={{ padding: '4px', borderRadius: '4px' }}
+                            >
+                              <option value="">— Select status —</option>
+                              <option value="Pending">Pending</option>
+                              <option value="Approved">Approved</option>
+                              <option value="Rejected">Rejected</option>
+                              <option value="Refunded">Refunded</option>
+                            </select>
+                          ) : (
+                            <span>{refund.status}</span>
+                          )}
+                        </td>
+                        <td className="cell-details">
+                          {refundEditingId === refund.id ? (
+                            <textarea
+                              value={refundEditingNote}
+                              onChange={(e) => setRefundEditingNote(e.target.value)}
+                              rows={2}
+                              placeholder="Add note"
+                              style={{ width: '100%', padding: '4px', borderRadius: '4px' }}
+                            />
+                          ) : (
+                            <span title={refund.admin_note}>{refund.admin_note || '—'}</span>
+                          )}
+                        </td>
+                        <td className="cell-date">{new Date(refund.created_at).toLocaleDateString()}</td>
+                        <td className="cell-date">{refund.resolved_at ? new Date(refund.resolved_at).toLocaleDateString() : '—'}</td>
+                        <td className="cell-actions">
+                          {refundEditingId === refund.id ? (
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button
+                                onClick={() => handleUpdateRefundStatus(refund.id)}
+                                className="primary-button"
+                                style={{ padding: '4px 8px', fontSize: '12px' }}
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRefundEditingId(null)
+                                  setRefundEditingStatus('')
+                                  setRefundEditingNote('')
+                                  setRefundError('')
+                                }}
+                                className="secondary-button"
+                                style={{ padding: '4px 8px', fontSize: '12px' }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setRefundEditingId(refund.id)
+                                setRefundEditingStatus(refund.status)
+                                setRefundEditingNote(refund.admin_note)
+                              }}
+                              className="secondary-button"
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {refundError && <div className="error-text" style={{ marginTop: '12px' }}>{refundError}</div>}
+            {refundMessage && <div className="success-text" style={{ marginTop: '12px' }}>{refundMessage}</div>}
           </div>
         </>
       )}

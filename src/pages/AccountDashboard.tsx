@@ -16,6 +16,15 @@ type InvoiceItem = {
   status: 'Open' | 'Paid' | 'Refund requested'
 }
 
+type RefundStatus = {
+  id: number
+  reason: string
+  status: string
+  admin_note: string
+  created_at: string
+  updated_at: string
+}
+
 type ReceiptItem = {
   id: string
   label: string
@@ -164,6 +173,8 @@ export function AccountDashboard() {
   const [timeZone, setTimeZone] = useState('Eastern Time')
   const [accessibility, setAccessibility] = useState('Standard')
   const [refundReason, setRefundReason] = useState('')
+  const [refundStatuses, setRefundStatuses] = useState<RefundStatus[]>([])
+  const [loadingRefunds, setLoadingRefunds] = useState(false)
   const [refundStatus, setRefundStatus] = useState('No refund requested yet.')
   const [accountState, setAccountState] = useState('Active')
   const [shortcutItems, setShortcutItems] = useState(defaultShortcutItems)
@@ -259,6 +270,24 @@ export function AccountDashboard() {
     setShortcutItems(accountData.shortcutItems)
   }
 
+  const fetchRefundStatus = async (token: string) => {
+    try {
+      setLoadingRefunds(true)
+      const response = await fetch('/api/account/refund-status', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (response.ok) {
+        const data = (await response.json()) as { refunds: RefundStatus[] }
+        setRefundStatuses(data.refunds || [])
+      }
+    } catch (error) {
+      console.error('Error fetching refund status:', error)
+    } finally {
+      setLoadingRefunds(false)
+    }
+  }
+
   const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSignInMessage('')
@@ -289,6 +318,8 @@ export function AccountDashboard() {
 
       if (accountResponse.ok) {
         applyAccountData((await accountResponse.json()) as AccountApiPayload)
+        // Also fetch refund status
+        await fetchRefundStatus(session.token)
       }
     } finally {
       setLoading(false)
@@ -336,6 +367,8 @@ export function AccountDashboard() {
 
       if (accountResponse.ok) {
         applyAccountData((await accountResponse.json()) as AccountApiPayload)
+        // Also fetch refund status
+        await fetchRefundStatus(session.token)
       }
     } finally {
       setLoading(false)
@@ -904,6 +937,44 @@ export function AccountDashboard() {
                     </p>
                   ))}
                 </div>
+
+                {refundStatuses.length > 0 && (
+                  <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                    <h4 style={{ marginTop: 0, marginBottom: '12px' }}>Your Refund Requests</h4>
+                    {loadingRefunds ? (
+                      <p>Loading refund status...</p>
+                    ) : (
+                      <table style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                            <th style={{ textAlign: 'left', padding: '8px' }}>Status</th>
+                            <th style={{ textAlign: 'left', padding: '8px' }}>Created</th>
+                            <th style={{ textAlign: 'left', padding: '8px' }}>Admin Note</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {refundStatuses.map((refund) => (
+                            <tr key={refund.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                              <td style={{ padding: '8px' }}>
+                                <span style={{
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  backgroundColor: refund.status === 'Approved' ? 'rgba(34,197,94,0.2)' : refund.status === 'Rejected' ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.2)',
+                                  color: refund.status === 'Approved' ? '#22c55e' : refund.status === 'Rejected' ? '#ef4444' : '#3b82f6'
+                                }}>
+                                  {refund.status}
+                                </span>
+                              </td>
+                              <td style={{ padding: '8px' }}>{new Date(refund.created_at).toLocaleDateString()}</td>
+                              <td style={{ padding: '8px', fontSize: '13px', color: '#c9d4e5' }}>{refund.admin_note || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+
                 <form onSubmit={handleRefundRequest} className="refund-form">
                   <label>
                     Refund reason

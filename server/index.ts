@@ -1616,6 +1616,38 @@ app.get('/api/account/invoices', async (req, res) => {
   }
 })
 
+app.get('/api/account/refund-status', async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
+
+    const email = await getAuthorizedAccountEmail(req)
+
+    if (!email) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const db = await getAccountDb()
+    const refunds = accountQueryAll(
+      db,
+      `SELECT id, reason, status, admin_note, created_at, updated_at FROM account_refund_requests WHERE user_email = ${escapeSqlLiteral(email)} ORDER BY created_at DESC`,
+    ) as Array<{
+      id: number
+      reason: string
+      status: string
+      admin_note: string
+      created_at: string
+      updated_at: string
+    }>
+
+    res.json({ refunds })
+  } catch (error) {
+    console.error('Error fetching refund status:', error)
+    res.status(500).json({ message: 'Failed to fetch refund status' })
+  }
+})
+
 app.post('/api/account/payment-requests', async (req, res) => {
   try {
     const email = await getAuthorizedAccountEmail(req)
