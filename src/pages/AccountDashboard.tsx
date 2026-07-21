@@ -78,17 +78,9 @@ type BillingPortalSessionResponse = {
   url: string
 }
 
-const defaultPaymentItems: PaymentItem[] = [
-  { id: 'pay-1', label: 'Service deposit', status: 'Paid', amount: '$125.00', method: 'Stripe card', date: '2026-07-01' },
-  { id: 'pay-2', label: 'Invoice balance', status: 'Pending', amount: '$240.00', method: 'Bank transfer', date: '2026-07-08' },
-  { id: 'pay-3', label: 'Final walkthrough', status: 'Overdue', amount: '$75.00', method: 'Cash', date: '2026-06-28' },
-]
+const defaultPaymentItems: PaymentItem[] = []
 
-const defaultInvoiceItems: InvoiceItem[] = [
-  { id: 'inv-1', number: 'INV-1042', total: '$365.00', status: 'Open' },
-  { id: 'inv-2', number: 'INV-1039', total: '$125.00', status: 'Paid' },
-  { id: 'inv-3', number: 'INV-1034', total: '$75.00', status: 'Refund requested' },
-]
+const defaultInvoiceItems: InvoiceItem[] = []
 
 const defaultReceiptItems: ReceiptItem[] = [
   { id: 'rec-1', label: 'Receipt for service deposit', createdAt: '2026-07-01' },
