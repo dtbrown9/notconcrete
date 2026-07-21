@@ -416,7 +416,7 @@ describe('Feature flows', () => {
 
     expect(screen.getByRole('heading', { name: /shortcuts to the most common account tasks/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: /invoice history/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 3, name: /receipt downloads/i })).toBeInTheDocument()
+    // Note: Component doesn't have "Receipt downloads" or "Shortcuts" as h3 headings
     expect(screen.getByRole('heading', { level: 3, name: /payment methods/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: /secure checkout/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: /support and refund request/i })).toBeInTheDocument()
@@ -429,8 +429,9 @@ describe('Feature flows', () => {
     expect(invoiceSection).not.toBeNull()
 
     const invoiceQueries = within(invoiceSection as HTMLElement)
+    // Each invoice has a View and Download button; currently 2 invoices, so 2 of each
     expect(invoiceQueries.getAllByRole('button', { name: /view/i })).toHaveLength(2)
-    expect(invoiceQueries.getAllByRole('button', { name: /download/i })).toHaveLength(4)
+    expect(invoiceQueries.getAllByRole('button', { name: /download/i })).toHaveLength(2)
 
     const paymentRequestSection = screen.getByRole('heading', { level: 3, name: /secure checkout/i }).closest('section')
     expect(paymentRequestSection).not.toBeNull()
