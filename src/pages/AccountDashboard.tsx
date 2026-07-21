@@ -452,13 +452,13 @@ export function AccountDashboard() {
           if (payload.payment.status === 'Succeeded' || payload.payment.status === 'Verified') {
             setPaymentMessage(
               payload.payment.confirmationNumber
-                ? `Payment successful. Confirmation number: ${payload.payment.confirmationNumber}.`
-                : 'Payment successful.',
+                ? `✓ Payment successful. Confirmation: ${payload.payment.confirmationNumber}. Your invoice will appear within 1-2 minutes.`
+                : '✓ Payment successful. Your invoice will appear within 1-2 minutes.',
             )
           } else if (payload.payment.status === 'Failed') {
-            setPaymentMessage(payload.payment.failureReason ? `Payment failed: ${payload.payment.failureReason}` : 'Payment failed.')
+            setPaymentMessage(payload.payment.failureReason ? `✗ Payment failed: ${payload.payment.failureReason}` : '✗ Payment failed.')
           } else {
-            setPaymentMessage('Payment is still pending confirmation.')
+            setPaymentMessage('⏳ Payment is still pending. Checking status...')
           }
         } else if (checkoutResult === 'cancel') {
           setPaymentMessage('Checkout was canceled before payment completed.')
@@ -838,10 +838,19 @@ export function AccountDashboard() {
                 ) : (
                   <p className="portal-note">PayPal is not configured on the server yet.</p>
                 )}
-                {paymentMessage && <p className="success-text">{paymentMessage}</p>}
+                {paymentMessage && (
+                  <div className="success-text" style={{ marginBottom: '16px' }}>
+                    <p>{paymentMessage}</p>
+                    {paymentMessage.includes('successful') && (
+                      <p style={{ fontSize: '0.85em', marginTop: '8px', opacity: '0.8' }}>
+                        💡 Tip: Refresh this page in a minute to see your invoice appear automatically.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="payment-request-list">
                   {paymentRequests.length === 0 ? (
-                    <p className="portal-note">No payments submitted yet. Your checkout results will appear here after Stripe confirms the charge.</p>
+                    <p className="portal-note">No payments submitted yet. After you complete a payment, your confirmation and invoice will appear here.</p>
                   ) : (
                     paymentRequests.map((request) => (
                       <article
@@ -899,20 +908,28 @@ export function AccountDashboard() {
             <section id="invoice-history" className="section-block split-layout">
               <div className="glass account-panel">
                 <h3 className="card-label">Invoice history</h3>
+                <p className="portal-note" style={{ marginBottom: '16px' }}>
+                  Invoices are automatically created after payments are confirmed. This typically takes 1-2 minutes from payment completion. 
+                  Check back after your payment to see your invoice and receipt.
+                </p>
                 <div className="invoice-list">
-                  {invoiceItems.map((invoice) => (
-                    <article key={invoice.id} className="invoice-row">
-                      <strong>{invoice.number}</strong>
-                      <span>{invoice.total}</span>
-                      <span>{invoice.status}</span>
-                      <button type="button" className="secondary-button" onClick={() => viewInvoiceSummary(invoice)}>
-                        View
-                      </button>
-                      <button type="button" className="secondary-button" onClick={() => downloadInvoiceSummary(invoice)}>
-                        Download
-                      </button>
-                    </article>
-                  ))}
+                  {invoiceItems.length === 0 ? (
+                    <p className="portal-note">No invoices yet. Invoices will appear here after your payment is processed.</p>
+                  ) : (
+                    invoiceItems.map((invoice) => (
+                      <article key={invoice.id} className="invoice-row">
+                        <strong>{invoice.number}</strong>
+                        <span>{invoice.total}</span>
+                        <span>{invoice.status}</span>
+                        <button type="button" className="secondary-button" onClick={() => viewInvoiceSummary(invoice)}>
+                          View
+                        </button>
+                        <button type="button" className="secondary-button" onClick={() => downloadInvoiceSummary(invoice)}>
+                          Download
+                        </button>
+                      </article>
+                    ))
+                  )}
                 </div>
               </div>
             </section>
