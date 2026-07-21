@@ -231,57 +231,15 @@ export function AccountDashboard() {
 
     const loadAccount = async () => {
       try {
-        const savedToken = window.localStorage.getItem('accountSessionToken')
+        // Only keep sessions in memory - require re-login on page refresh
         const savedEmail = window.localStorage.getItem('accountEmail')
 
-        if (!savedToken) {
-          setSignInMessage('')
-          setLoading(false)
-          return
-        }
-
-        setSessionToken(savedToken)
-        const response = await fetch('/api/account/me', {
-          headers: {
-            Authorization: `Bearer ${savedToken}`,
-          },
-        })
-
-        if (!response.ok) {
-          setLoading(false)
-          return
-        }
-
-        const accountData = (await response.json()) as AccountApiPayload
-        applyAccountData(accountData)
+        // Don't auto-restore session - require sign-in every time page loads
         setSignInMessage('')
-        window.localStorage.setItem('accountEmail', accountData.accountEmail || savedEmail || accountEmail)
-        
-        // Fetch invoices from Stripe
-        try {
-          const invoicesResponse = await fetch('/api/account/invoices', {
-            headers: {
-              Authorization: `Bearer ${savedToken}`,
-            },
-          })
-          if (invoicesResponse.ok) {
-            const invoicesData = (await invoicesResponse.json()) as { invoices: Array<{ id: string; number: string; total: string; status: string; url?: string; createdAt?: string }> }
-            const formattedInvoices = invoicesData.invoices.map((inv) => ({
-              id: inv.id,
-              number: inv.number,
-              total: inv.total,
-              status: (inv.status === 'Paid' ? 'Paid' : inv.status === 'Open' ? 'Open' : 'Refund requested') as 'Open' | 'Paid' | 'Refund requested',
-              url: inv.url,
-              createdAt: inv.createdAt,
-            }))
-            setInvoiceItems(formattedInvoices)
-          }
-        } catch (err) {
-          // Keep default invoices if API call fails
-          console.error('Error fetching invoices:', err)
-        }
+        setLoading(false)
+        return
       } catch {
-        // Keep fallback data when the API is unavailable.
+        // Keep fallback data when the API is unavailable
       } finally {
         setLoading(false)
       }
@@ -327,7 +285,8 @@ export function AccountDashboard() {
       }
 
       const session = (await response.json()) as AccountSessionResponse
-      window.localStorage.setItem('accountSessionToken', session.token)
+      // Keep token in memory only - don't persist to localStorage
+      setSessionToken(session.token)
       window.localStorage.setItem('accountEmail', session.accountEmail)
       setSessionToken(session.token)
       setSignInMessage('Signed in successfully.')
@@ -368,7 +327,8 @@ export function AccountDashboard() {
       }
 
       const session = (await response.json()) as AccountSignupResponse
-      window.localStorage.setItem('accountSessionToken', session.token)
+      // Keep token in memory only - don't persist to localStorage
+      setSessionToken(session.token)
       window.localStorage.setItem('accountEmail', session.accountEmail)
       setSessionToken(session.token)
       setAccountName(session.accountName || accountDisplayName || 'Customer')
@@ -391,7 +351,7 @@ export function AccountDashboard() {
   }
 
   const handleSignOut = async () => {
-    const token = sessionToken || window.localStorage.getItem('accountSessionToken') || ''
+    const token = sessionToken || ''
 
     if (token) {
       try {
