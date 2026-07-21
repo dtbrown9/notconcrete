@@ -707,7 +707,14 @@ const getStripeClient = () => {
   return new Stripe(stripeSecretKey)
 }
 
-const isStripeConfigured = () => Boolean(process.env.STRIPE_SECRET_KEY?.trim())
+const isStripeConfigured = () => {
+  const isConfigured = Boolean(process.env.STRIPE_SECRET_KEY?.trim())
+  if (!isConfigured) {
+    console.warn('[isStripeConfigured] STRIPE_SECRET_KEY not found. Available env vars:', 
+      Object.keys(process.env).filter(k => k.includes('STRIPE')).join(', ') || 'NONE')
+  }
+  return isConfigured
+}
 
 const getStripeWebhookSecret = () => process.env.STRIPE_WEBHOOK_SECRET || ''
 
