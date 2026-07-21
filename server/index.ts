@@ -684,8 +684,10 @@ const isStripeConfigured = () => {
 
 const getStripeWebhookSecret = () => process.env.STRIPE_WEBHOOK_SECRET || ''
 
-const getPaymentReturnUrl = (sessionIdPlaceholder: string, result: 'success' | 'cancel') =>
-  `${appPublicUrl}/account?checkout_session_id=${sessionIdPlaceholder}&checkout_result=${result}`
+const getPaymentReturnUrl = (sessionIdPlaceholder: string, result: 'success' | 'cancel', origin?: string) => {
+  const publicUrl = origin || appPublicUrl
+  return `${publicUrl}/account?checkout_session_id=${sessionIdPlaceholder}&checkout_result=${result}`
+}
 
 const persistAccountDb = (db: Database) => {
   writeFileSync(accountDbPath, Buffer.from(db.export()))
@@ -988,13 +990,14 @@ const reconcileStripeCheckoutSession = async (checkoutSession: StripeCheckoutSes
   }
 }
 
-const createBillingPortalSession = async (email: string) => {
+const createBillingPortalSession = async (email: string, origin: string) => {
   const stripe = getStripeClient()
   const customerId = await getOrCreateStripeCustomerId(email)
+  const publicUrl = origin || appPublicUrl
 
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${appPublicUrl}/account`,
+    return_url: `${publicUrl}/account`,
   })
 
   if (!session.url) {
@@ -1006,7 +1009,7 @@ const createBillingPortalSession = async (email: string) => {
   }
 }
 
-const createStripeCheckoutSession = async (email: string, amountInput: string, note: string) => {
+const createStripeCheckoutSession = async (email: string, amountInput: string, note: string, origin?: string) => {
   const stripe = getStripeClient()
   const stripeCustomerId = await getOrCreateStripeCustomerId(email)
   const amountCents = parsePaymentAmount(amountInput)
@@ -1019,8 +1022,8 @@ const createStripeCheckoutSession = async (email: string, amountInput: string, n
     mode: 'payment',
     client_reference_id: normalizeAccountEmail(email),
     customer: stripeCustomerId,
-    success_url: getPaymentReturnUrl('{CHECKOUT_SESSION_ID}', 'success'),
-    cancel_url: getPaymentReturnUrl('{CHECKOUT_SESSION_ID}', 'cancel'),
+    success_url: getPaymentReturnUrl('{CHECKOUT_SESSION_ID}', 'success', origin),
+    cancel_url: getPaymentReturnUrl('{CHECKOUT_SESSION_ID}', 'cancel', origin),
     payment_method_types: ['card'],
     line_items: [
       {
@@ -1667,7 +1670,12 @@ app.post('/api/account/billing-portal/session', async (req, res) => {
       return res.status(503).json({ message: 'Stripe is not configured on the server' })
     }
 
-    const portalSession = await createBillingPortalSession(email)
+    // Get the public URL from the request origin or headers
+    const protocol = req.get('x-forwarded-proto') || req.protocol
+    const host = req.get('x-forwarded-host') || req.get('host')
+    const origin = `${protocol}://${host}`
+
+    const portalSession = await createBillingPortalSession(email, origin)
     res.status(201).json({ ok: true, ...portalSession })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create billing portal session'
@@ -1696,7 +1704,12 @@ app.post('/api/account/payments/checkout-session', async (req, res) => {
       return res.status(400).json({ message: 'Payment note is too long' })
     }
 
-    const payment = await createStripeCheckoutSession(email, amount, note)
+    // Get the public URL from the request origin or headers
+    const protocol = req.get('x-forwarded-proto') || req.protocol
+    const host = req.get('x-forwarded-host') || req.get('host')
+    const origin = `${protocol}://${host}`
+
+    const payment = await createStripeCheckoutSession(email, amount, note, origin)
     res.status(201).json({ ok: true, payment })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to start checkout'
