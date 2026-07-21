@@ -35,8 +35,6 @@ const supabaseUrl = 'https://nbkahtpyukqojfbumcwz.supabase.co'
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ia2FodHB5dWtxb2pmYnVtY3d6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODEzNjgsImV4cCI6MjA5NzE1NzM2OH0.yQSkC8RzWPZWHzPzxzDc-i64_wARg_qPMpv50btDoDo'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
 const supabaseApiKey = supabaseServiceKey
-const require = createRequire(import.meta.url)
-let Stripe: StripeConstructor | null = null
 
 type StripeCheckoutSession = {
   id: string
@@ -655,6 +653,19 @@ const formatPaymentAmount = (amountCents: number, currency: string) =>
     currency: currency.toUpperCase(),
   }).format(amountCents / 100)
 
+const getStripeConstructor = () => {
+  // If we're in a test environment and a mock has been set globally, use it
+  const mockStripe = (globalThis as any).__mockStripeConstructor
+  if (mockStripe) {
+    return mockStripe
+  }
+
+  const require = createRequire(import.meta.url)
+  const stripeModule = require('stripe')
+  // Handle both ESM (with __esModule flag) and CommonJS exports
+  return stripeModule.default || stripeModule
+}
+
 const getStripeClient = () => {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 
@@ -662,15 +673,17 @@ const getStripeClient = () => {
     throw new Error('Stripe is not configured')
   }
 
-  if (!Stripe) {
-    try {
-      Stripe = require('stripe') as StripeConstructor
-    } catch {
-      throw new Error('Stripe is not installed')
+  try {
+    const StripeConstructor = getStripeConstructor()
+    
+    if (typeof StripeConstructor !== 'function') {
+      throw new Error(`Expected Stripe to be a constructor, got ${typeof StripeConstructor}`)
     }
+    
+    return new StripeConstructor(stripeSecretKey)
+  } catch (error) {
+    throw new Error(`Failed to initialize Stripe: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
-
-  return new Stripe(stripeSecretKey)
 }
 
 const isStripeConfigured = () => {
@@ -2290,7 +2303,7 @@ if (path.join(process.cwd(), 'dist', 'client')) {
   })
 }
 
-export { app }
+export { app, getStripeConstructor }
 
 if (!isTestEnvironment) {
   // Log environment variable status for debugging

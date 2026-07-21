@@ -6,105 +6,100 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const stripeSessions = new Map<string, Record<string, unknown>>()
 const stripeCustomers = new Map<string, Record<string, unknown>>()
 
-vi.mock('stripe', async () => {
-  class MockStripe {
-    constructor(_apiKey: string) {
-      // Accept and ignore apiKey
-    }
-
-    customers = {
-      create: vi.fn(async (params: Record<string, unknown>) => {
-        const customerId = `cus_test_${String(stripeCustomers.size + 1).padStart(4, '0')}`
-        const customer = {
-          id: customerId,
-          email: String(params.email || ''),
-          name: String(params.name || ''),
-          metadata: params.metadata || {},
-        }
-        stripeCustomers.set(customerId, customer)
-        return customer
-      }),
-    }
-
-    billingPortal = {
-      sessions: {
-        create: vi.fn(async (params: Record<string, unknown>) => {
-          const customerId = String(params.customer || '')
-          return {
-            id: `bps_test_${String(stripeCustomers.size).padStart(4, '0')}`,
-            url: `https://billing.stripe.com/p/session/${customerId || 'test'}`,
-          }
-        }),
-      },
-    }
-
-    checkout = {
-      sessions: {
-        create: vi.fn(async (params: Record<string, unknown>) => {
-          const lineItems = (params.line_items as Array<Record<string, any>> | undefined) || []
-          const firstLineItem = lineItems[0] || {}
-          const priceData = firstLineItem.price_data || {}
-          const productData = priceData.product_data || {}
-          const sessionId = `cs_test_${String(stripeSessions.size + 1).padStart(4, '0')}`
-          const session = {
-            id: sessionId,
-            url: `https://checkout.stripe.com/c/pay/${sessionId}`,
-            status: 'open',
-            payment_status: 'unpaid',
-            payment_intent: `pi_test_${String(stripeSessions.size + 1).padStart(4, '0')}`,
-            client_reference_id: String(params.client_reference_id || ''),
-            customer_details: { email: String(params.customer_email || '') },
-            amount_total: Number(priceData.unit_amount || 0),
-            currency: String(priceData.currency || 'usd'),
-            metadata: params.metadata || {},
-            description: String(productData.description || ''),
-          }
-          stripeSessions.set(sessionId, session)
-          return session
-        }),
-        retrieve: vi.fn(async (sessionId: string) => {
-          return (
-            stripeSessions.get(sessionId) || {
-              id: sessionId,
-              status: 'open',
-              payment_status: 'unpaid',
-              payment_intent: '',
-              client_reference_id: '',
-              customer_details: { email: '' },
-              amount_total: 0,
-              currency: 'usd',
-              metadata: {},
-              description: '',
-            }
-          )
-        }),
-      },
-    }
-
-    webhooks = {
-      constructEvent: vi.fn((rawBody: Buffer | string, signature: string, secret: string) => {
-        if (signature !== 'valid-stripe-signature' || secret !== 'whsec_test') {
-          throw new Error('Invalid signature')
-        }
-
-        const event = JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody)
-
-        if (event.type === 'checkout.session.completed') {
-          const session = event.data.object as Record<string, unknown>
-          stripeSessions.set(String(session.id || ''), session)
-        }
-
-        return event
-      }),
-    }
-  }
-
-  // Return for both ESM and CommonJS
-  return { __esModule: true, default: MockStripe }
-})
-
 let server: http.Server | undefined
 let originalFetch: typeof fetch | undefined
+
+const MockStripe = class {
+  constructor(_apiKey: string) {
+    // Accept and ignore apiKey
+  }
+
+  customers = {
+    create: vi.fn(async (params: Record<string, unknown>) => {
+      const customerId = `cus_test_${String(stripeCustomers.size + 1).padStart(4, '0')}`
+      const customer = {
+        id: customerId,
+        email: String(params.email || ''),
+        name: String(params.name || ''),
+        metadata: params.metadata || {},
+      }
+      stripeCustomers.set(customerId, customer)
+      return customer
+    }),
+  }
+
+  billingPortal = {
+    sessions: {
+      create: vi.fn(async (params: Record<string, unknown>) => {
+        const customerId = String(params.customer || '')
+        return {
+          id: `bps_test_${String(stripeCustomers.size).padStart(4, '0')}`,
+          url: `https://billing.stripe.com/p/session/${customerId || 'test'}`,
+        }
+      }),
+    },
+  }
+
+  checkout = {
+    sessions: {
+      create: vi.fn(async (params: Record<string, unknown>) => {
+        const lineItems = (params.line_items as Array<Record<string, any>> | undefined) || []
+        const firstLineItem = lineItems[0] || {}
+        const priceData = firstLineItem.price_data || {}
+        const productData = priceData.product_data || {}
+        const sessionId = `cs_test_${String(stripeSessions.size + 1).padStart(4, '0')}`
+        const session = {
+          id: sessionId,
+          url: `https://checkout.stripe.com/c/pay/${sessionId}`,
+          status: 'open',
+          payment_status: 'unpaid',
+          payment_intent: `pi_test_${String(stripeSessions.size + 1).padStart(4, '0')}`,
+          client_reference_id: String(params.client_reference_id || ''),
+          customer_details: { email: String(params.customer_email || '') },
+          amount_total: Number(priceData.unit_amount || 0),
+          currency: String(priceData.currency || 'usd'),
+          metadata: params.metadata || {},
+          description: String(productData.description || ''),
+        }
+        stripeSessions.set(sessionId, session)
+        return session
+      }),
+      retrieve: vi.fn(async (sessionId: string) => {
+        return (
+          stripeSessions.get(sessionId) || {
+            id: sessionId,
+            status: 'open',
+            payment_status: 'unpaid',
+            payment_intent: '',
+            client_reference_id: '',
+            customer_details: { email: '' },
+            amount_total: 0,
+            currency: 'usd',
+            metadata: {},
+            description: '',
+          }
+        )
+      }),
+    },
+  }
+
+  webhooks = {
+    constructEvent: vi.fn((rawBody: Buffer | string, signature: string, secret: string) => {
+      if (signature !== 'valid-stripe-signature' || secret !== 'whsec_test') {
+        throw new Error('Invalid signature')
+      }
+
+      const event = JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody)
+
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object as Record<string, unknown>
+        stripeSessions.set(String(session.id || ''), session)
+      }
+
+      return event
+    }),
+  }
+}
 
 const startServer = async () => {
   const { app } = await import('../../server/index')
@@ -178,6 +173,10 @@ describe('Server security controls', () => {
     originalFetch = global.fetch
     stripeSessions.clear()
     stripeCustomers.clear()
+    
+    // Set up Stripe mock for this test environment
+    ;(globalThis as any).__mockStripeConstructor = MockStripe
+    
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('ENABLE_HTTPS_REDIRECT', 'true')
     vi.stubEnv('ENABLE_HSTS', 'true')
@@ -215,6 +214,9 @@ describe('Server security controls', () => {
     if (originalFetch) {
       global.fetch = originalFetch
     }
+
+    // Clean up global mock
+    delete (globalThis as any).__mockStripeConstructor
 
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
@@ -387,11 +389,47 @@ describe('Server security controls', () => {
     expect(signInResponse.body).toContain(email)
   })
 
-  it.skip('creates a Stripe checkout session, reconciles webhook completion, and rejects bad signatures', async () => {
-    // SKIPPED: Vitest's vi.mock() doesn't work with createRequire().require() calls
-    // The server uses dynamic require('stripe') which bypasses mocking
-    // TODO: Refactor server/index.ts to use top-level import for Stripe
-    // This prevents Vitest from properly mocking the stripe module
+  it('creates a Stripe checkout session, reconciles webhook completion, and rejects bad signatures', async () => {
+    const adminSettings: Array<Record<string, string>> = []
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method || 'GET'
+
+        if (url.includes('/rest/v1/admin_settings')) {
+          if (method === 'POST') {
+            const body = JSON.parse(String(init?.body || '{}')) as Record<string, string>
+            const record = { id: '1', ...body }
+            adminSettings.splice(0, adminSettings.length, record)
+            return {
+              ok: true,
+              status: 201,
+              statusText: 'Created',
+              json: async () => [record],
+              text: async () => JSON.stringify([record]),
+            } as Response
+          }
+
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: async () => adminSettings,
+            text: async () => JSON.stringify(adminSettings),
+          } as Response
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => [],
+          text: async () => '[]',
+        } as Response
+      }) as typeof fetch,
+    )
 
     const { port } = await startServer()
     const secureHeaders = {
@@ -505,8 +543,7 @@ describe('Server security controls', () => {
     expect(paymentRequestsResponse.body).toContain('Succeeded')
   })
 
-  it.skip('creates a billing portal session for authorized account users', async () => {
-    // SKIPPED: Same reason as checkout session test above
+  it('creates a billing portal session for authorized account users', async () => {
     const { port } = await startServer()
     const secureHeaders = {
       Host: `127.0.0.1:${port}`,
