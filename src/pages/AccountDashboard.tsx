@@ -115,17 +115,29 @@ const downloadTextFile = (filename: string, contents: string) => {
   window.URL.revokeObjectURL(url)
 }
 
-const downloadInvoiceSummary = (invoice: InvoiceItem) => {
-  downloadTextFile(`${invoice.number}.txt`, `Invoice ${invoice.number}\nTotal: ${invoice.total}\nStatus: ${invoice.status}`)
+const downloadInvoiceSummary = (invoice: InvoiceItem & { url?: string }) => {
+  if (invoice.url) {
+    // For Stripe invoices with PDF URL, open the PDF in a new tab
+    window.open(invoice.url, '_blank', 'noopener')
+  } else {
+    // Fallback for non-Stripe invoices
+    downloadTextFile(`${invoice.number}.txt`, `Invoice ${invoice.number}\nTotal: ${invoice.total}\nStatus: ${invoice.status}`)
+  }
 }
 
-const viewInvoiceSummary = (invoice: InvoiceItem) => {
-  const blob = new Blob([`Invoice ${invoice.number}\nTotal: ${invoice.total}\nStatus: ${invoice.status}`], {
-    type: 'text/plain;charset=utf-8',
-  })
-  const url = window.URL.createObjectURL(blob)
-  window.open(url, '_blank', 'noopener')
-  window.URL.revokeObjectURL(url)
+const viewInvoiceSummary = (invoice: InvoiceItem & { url?: string }) => {
+  if (invoice.url) {
+    // For Stripe invoices, open the PDF URL directly
+    window.open(invoice.url, '_blank', 'noopener')
+  } else {
+    // Fallback for non-Stripe invoices
+    const blob = new Blob([`Invoice ${invoice.number}\nTotal: ${invoice.total}\nStatus: ${invoice.status}`], {
+      type: 'text/plain;charset=utf-8',
+    })
+    const url = window.URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    window.URL.revokeObjectURL(url)
+  }
 }
 
 const scrollToSection = (id: string) => {
@@ -153,7 +165,7 @@ export function AccountDashboard() {
   const [paypalCheckoutUrl, setPaypalCheckoutUrl] = useState('')
   const [paymentItems, setPaymentItems] = useState(defaultPaymentItems)
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([])
-  const [invoiceItems, setInvoiceItems] = useState(defaultInvoiceItems)
+  const [invoiceItems, setInvoiceItems] = useState<Array<{ id: string; number: string; total: string; status: 'Open' | 'Paid' | 'Refund requested'; url?: string; createdAt?: string }>>([])
   const [receiptItems, setReceiptItems] = useState(defaultReceiptItems)
   const [supportContacts, setSupportContacts] = useState(defaultSupportContacts)
   const [language, setLanguage] = useState('English')
@@ -244,6 +256,30 @@ export function AccountDashboard() {
         applyAccountData(accountData)
         setSignInMessage('')
         window.localStorage.setItem('accountEmail', accountData.accountEmail || savedEmail || accountEmail)
+        
+        // Fetch invoices from Stripe
+        try {
+          const invoicesResponse = await fetch('/api/account/invoices', {
+            headers: {
+              Authorization: `Bearer ${savedToken}`,
+            },
+          })
+          if (invoicesResponse.ok) {
+            const invoicesData = (await invoicesResponse.json()) as { invoices: Array<{ id: string; number: string; total: string; status: string; url?: string; createdAt?: string }> }
+            const formattedInvoices = invoicesData.invoices.map((inv) => ({
+              id: inv.id,
+              number: inv.number,
+              total: inv.total,
+              status: (inv.status === 'Paid' ? 'Paid' : inv.status === 'Open' ? 'Open' : 'Refund requested') as 'Open' | 'Paid' | 'Refund requested',
+              url: inv.url,
+              createdAt: inv.createdAt,
+            }))
+            setInvoiceItems(formattedInvoices)
+          }
+        } catch (err) {
+          // Keep default invoices if API call fails
+          console.error('Error fetching invoices:', err)
+        }
       } catch {
         // Keep fallback data when the API is unavailable.
       } finally {

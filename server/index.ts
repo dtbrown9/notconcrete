@@ -617,10 +617,11 @@ const accountSchema = `
     failure_reason TEXT NOT NULL DEFAULT '',
     receipt_url TEXT NOT NULL DEFAULT '',
     admin_note TEXT NOT NULL DEFAULT '',
+    stripe_invoice_id TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     confirmed_at TEXT NOT NULL DEFAULT ''
-  );
+  };
 
   CREATE INDEX IF NOT EXISTS idx_account_sessions_user_email ON account_sessions(user_email);
   CREATE INDEX IF NOT EXISTS idx_account_payment_requests_user_email ON account_payment_requests(user_email);
@@ -850,6 +851,7 @@ const upsertStripePaymentRecord = async (record: {
   failureReason?: string
   receiptUrl?: string
   confirmedAt?: string
+  stripeInvoiceId?: string
 }) => {
   const db = await getAccountDb()
   const existing = accountQueryOne(
@@ -872,22 +874,82 @@ const upsertStripePaymentRecord = async (record: {
   const failureReason = record.failureReason || ''
   const receiptUrl = record.receiptUrl || ''
   const paymentMethod = record.paymentMethod || 'Stripe Checkout'
+  const stripeInvoiceId = record.stripeInvoiceId || ''
 
   if (existing) {
     accountRun(
       db,
-      `UPDATE account_payments SET confirmation_number = ${escapeSqlLiteral(confirmationNumber || String(existing.confirmation_number || ''))}, payment_intent_id = ${escapeSqlLiteral(record.paymentIntentId)}, user_email = ${escapeSqlLiteral(normalizeAccountEmail(record.email))}, payment_method = ${escapeSqlLiteral(paymentMethod)}, amount = ${escapeSqlLiteral(amount)}, amount_cents = ${String(record.amountCents)}, currency = ${escapeSqlLiteral(record.currency)}, note = ${escapeSqlLiteral(record.note)}, status = ${escapeSqlLiteral(record.status)}, processor_status = ${escapeSqlLiteral(record.processorStatus)}, failure_reason = ${escapeSqlLiteral(failureReason)}, receipt_url = ${escapeSqlLiteral(receiptUrl)}, updated_at = CURRENT_TIMESTAMP, confirmed_at = ${escapeSqlLiteral(confirmedAt)} WHERE checkout_session_id = ${escapeSqlLiteral(record.checkoutSessionId)}`,
+      `UPDATE account_payments SET confirmation_number = ${escapeSqlLiteral(confirmationNumber || String(existing.confirmation_number || ''))}, payment_intent_id = ${escapeSqlLiteral(record.paymentIntentId)}, user_email = ${escapeSqlLiteral(normalizeAccountEmail(record.email))}, payment_method = ${escapeSqlLiteral(paymentMethod)}, amount = ${escapeSqlLiteral(amount)}, amount_cents = ${String(record.amountCents)}, currency = ${escapeSqlLiteral(record.currency)}, note = ${escapeSqlLiteral(record.note)}, status = ${escapeSqlLiteral(record.status)}, processor_status = ${escapeSqlLiteral(record.processorStatus)}, failure_reason = ${escapeSqlLiteral(failureReason)}, receipt_url = ${escapeSqlLiteral(receiptUrl)}, stripe_invoice_id = ${escapeSqlLiteral(stripeInvoiceId)}, updated_at = CURRENT_TIMESTAMP, confirmed_at = ${escapeSqlLiteral(confirmedAt)} WHERE checkout_session_id = ${escapeSqlLiteral(record.checkoutSessionId)}`,
     )
   } else {
     accountRun(
       db,
-      `INSERT INTO account_payments (confirmation_number, checkout_session_id, payment_intent_id, user_email, payment_method, amount, amount_cents, currency, note, status, processor_status, failure_reason, receipt_url, admin_note, created_at, updated_at, confirmed_at) VALUES (${escapeSqlLiteral(confirmationNumber)}, ${escapeSqlLiteral(record.checkoutSessionId)}, ${escapeSqlLiteral(record.paymentIntentId)}, ${escapeSqlLiteral(normalizeAccountEmail(record.email))}, ${escapeSqlLiteral(paymentMethod)}, ${escapeSqlLiteral(amount)}, ${String(record.amountCents)}, ${escapeSqlLiteral(record.currency)}, ${escapeSqlLiteral(record.note)}, ${escapeSqlLiteral(record.status)}, ${escapeSqlLiteral(record.processorStatus)}, ${escapeSqlLiteral(failureReason)}, ${escapeSqlLiteral(receiptUrl)}, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${escapeSqlLiteral(confirmedAt)})`,
+      `INSERT INTO account_payments (confirmation_number, checkout_session_id, payment_intent_id, user_email, payment_method, amount, amount_cents, currency, note, status, processor_status, failure_reason, receipt_url, stripe_invoice_id, admin_note, created_at, updated_at, confirmed_at) VALUES (${escapeSqlLiteral(confirmationNumber)}, ${escapeSqlLiteral(record.checkoutSessionId)}, ${escapeSqlLiteral(record.paymentIntentId)}, ${escapeSqlLiteral(normalizeAccountEmail(record.email))}, ${escapeSqlLiteral(paymentMethod)}, ${escapeSqlLiteral(amount)}, ${String(record.amountCents)}, ${escapeSqlLiteral(record.currency)}, ${escapeSqlLiteral(record.note)}, ${escapeSqlLiteral(record.status)}, ${escapeSqlLiteral(record.processorStatus)}, ${escapeSqlLiteral(failureReason)}, ${escapeSqlLiteral(receiptUrl)}, ${escapeSqlLiteral(stripeInvoiceId)}, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${escapeSqlLiteral(confirmedAt)})`,
     )
   }
 
   persistAccountDb(db)
 
   return confirmationNumber
+}
+
+const createStripeInvoice = async (email: string, amountCents: number, currency: string, note: string): Promise<string> => {
+  try {
+    const stripe = getStripeClient()
+    const customerId = await getOrCreateStripeCustomerId(email)
+    
+    // Create invoice with correct Stripe API calls
+    const invoice = await (stripe as any).invoices.create({
+      customer: customerId,
+      currency: currency || 'usd',
+      description: note || 'Cleaning service payment',
+      auto_advance: false,
+    })
+    
+    // Add line item to invoice
+    await (stripe as any).invoiceItems.create({
+      customer: customerId,
+      invoice: invoice.id,
+      amount: amountCents,
+      currency: currency || 'usd',
+      description: 'Cleaning service payment',
+    })
+    
+    // Finalize the invoice
+    await (stripe as any).invoices.finalizeInvoice(invoice.id)
+    
+    return invoice.id
+  } catch (error) {
+    console.error('Error creating Stripe invoice:', error)
+    return ''
+  }
+}
+
+const getStripeInvoicesForCustomer = async (email: string) => {
+  try {
+    const stripe = getStripeClient()
+    const customerId = await getOrCreateStripeCustomerId(email)
+    
+    // Fetch all invoices for this customer
+    const invoices = await (stripe as any).invoices.list({
+      customer: customerId,
+      limit: 100,
+    })
+    
+    // Format invoices for the frontend
+    return invoices.data.map((invoice: any) => ({
+      id: invoice.id,
+      number: invoice.number || 'INV-0000',
+      total: `$${((invoice.total || 0) / 100).toFixed(2)}`,
+      status: invoice.status === 'paid' ? 'Paid' : invoice.status === 'draft' ? 'Draft' : 'Open',
+      url: invoice.pdf || '',
+      createdAt: new Date(invoice.created * 1000).toISOString(),
+      description: invoice.description || 'Cleaning service payment',
+    }))
+  } catch (error) {
+    console.error('Error fetching Stripe invoices:', error)
+    return []
+  }
 }
 
 const reconcileStripeCheckoutSession = async (checkoutSession: StripeCheckoutSession) => {
@@ -917,6 +979,31 @@ const reconcileStripeCheckoutSession = async (checkoutSession: StripeCheckoutSes
     receiptUrl,
     confirmedAt: status === 'Succeeded' ? new Date().toISOString() : '',
   })
+
+  // Create Stripe invoice if payment succeeded
+  let stripeInvoiceId = ''
+  if (status === 'Succeeded') {
+    stripeInvoiceId = await createStripeInvoice(email, amountCents, currency, note)
+    
+    // Update payment record with invoice ID
+    if (stripeInvoiceId) {
+      await upsertStripePaymentRecord({
+        email,
+        checkoutSessionId,
+        paymentIntentId,
+        paymentMethod,
+        amountCents,
+        currency,
+        note,
+        status,
+        processorStatus,
+        failureReason,
+        receiptUrl,
+        stripeInvoiceId,
+        confirmedAt: new Date().toISOString(),
+      })
+    }
+  }
 
   return {
     confirmationNumber,
@@ -1493,6 +1580,26 @@ app.get('/api/account/payment-requests', async (req, res) => {
   } catch (error) {
     console.error('Error fetching payment requests:', error)
     res.status(500).json({ message: 'Failed to fetch payment requests' })
+  }
+})
+
+app.get('/api/account/invoices', async (req, res) => {
+  try {
+    const email = await getAuthorizedAccountEmail(req)
+
+    if (!email) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    if (!isStripeConfigured()) {
+      return res.json({ invoices: [] })
+    }
+
+    const invoices = await getStripeInvoicesForCustomer(email)
+    res.json({ invoices })
+  } catch (error) {
+    console.error('Error fetching invoices:', error)
+    res.status(500).json({ message: 'Failed to fetch invoices' })
   }
 })
 
