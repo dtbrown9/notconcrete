@@ -413,21 +413,10 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     billingPortalUrl: '',
     paypalCheckoutUrl: process.env.PAYPAL_CHECKOUT_URL || '',
     paymentProcessorReady: true,
-    paymentItems: [
-      { id: 'pay-1', label: 'Service deposit', status: 'Paid', amount: '$125.00', method: 'Stripe card', date: '2026-07-01' },
-      { id: 'pay-2', label: 'Invoice balance', status: 'Pending', amount: '$240.00', method: 'Bank transfer', date: '2026-07-08' },
-      { id: 'pay-3', label: 'Final walkthrough', status: 'Overdue', amount: '$75.00', method: 'Cash', date: '2026-06-28' },
-    ],
+    paymentItems: [],
     paymentRequests: [],
-    invoiceItems: [
-      { id: 'inv-1', number: 'INV-1042', total: '$365.00', status: 'Open' },
-      { id: 'inv-2', number: 'INV-1039', total: '$125.00', status: 'Paid' },
-      { id: 'inv-3', number: 'INV-1034', total: '$75.00', status: 'Refund requested' },
-    ],
-    receiptItems: [
-      { id: 'rec-1', label: 'Receipt for service deposit', createdAt: '2026-07-01' },
-      { id: 'rec-2', label: 'Receipt for pressure washing', createdAt: '2026-06-20' },
-    ],
+    invoiceItems: [],
+    receiptItems: [],
     supportContacts: [
       { label: 'Admin support email', value: 'Tw3y111@aol.com' },
       { label: 'Admin support phone', value: '410-905-9649' },
@@ -440,7 +429,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     },
     refundStatus: 'No refund requested yet.',
     accountState: 'Active',
-    shortcutItems: ['Pay invoice', 'Download receipt', 'Request refund', 'Contact admin', 'Update payment method'],
+    shortcutItems: ['Pay invoice', 'Request refund', 'Contact admin', 'Update payment method'],
   },
   'jordan.lee@example.com': {
     accountEmail: 'jordan.lee@example.com',
@@ -451,9 +440,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     paymentItems: [],
     paymentRequests: [],
     invoiceItems: [],
-    receiptItems: [
-      { id: 'rec-1', label: 'Receipt for service deposit', createdAt: '2026-07-01' },
-    ],
+    receiptItems: [],
     supportContacts: [
       { label: 'Admin support email', value: 'Tw3y111@aol.com' },
     ],
@@ -464,7 +451,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     },
     refundStatus: 'No refund requested yet.',
     accountState: 'Active',
-    shortcutItems: ['Pay invoice', 'Download receipt', 'Request refund'],
+    shortcutItems: ['Pay invoice', 'Request refund'],
   },
   'tammy.business@example.com': {
     accountEmail: 'tammy.business@example.com',
@@ -475,9 +462,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     paymentItems: [],
     paymentRequests: [],
     invoiceItems: [],
-    receiptItems: [
-      { id: 'rec-1', label: 'Receipt for invoice INV-1048', createdAt: '2026-07-03' },
-    ],
+    receiptItems: [],
     supportContacts: [
       { label: 'Admin support email', value: 'Tw3y111@aol.com' },
       { label: 'Admin support phone', value: '410-905-9649' },
@@ -489,7 +474,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     },
     refundStatus: 'No refund requested yet.',
     accountState: 'Active',
-    shortcutItems: ['Pay invoice', 'Download receipt', 'Request refund', 'Contact admin'],
+    shortcutItems: ['Pay invoice', 'Request refund', 'Contact admin'],
   },
   'demo.customer@example.com': {
     accountEmail: 'demo.customer@example.com',
@@ -498,24 +483,9 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     paypalCheckoutUrl: process.env.PAYPAL_CHECKOUT_URL || '',
     paymentProcessorReady: true,
     paymentItems: [],
-    paymentRequests: [
-      {
-        accountEmail: 'demo.customer@example.com',
-        confirmationNumber: 'KC-DEMO123',
-        paymentMethod: 'Venmo',
-        amount: '$295.00',
-        note: 'Invoice INV-2001',
-        status: 'Verified',
-        adminNote: 'Demo verification complete.',
-        createdAt: '2026-07-08T09:00:00.000Z',
-        verifiedAt: '2026-07-08T09:10:00.000Z',
-      },
-    ],
+    paymentRequests: [],
     invoiceItems: [],
-    receiptItems: [
-      { id: 'rec-1', label: 'Receipt for service deposit', createdAt: '2026-07-02' },
-      { id: 'rec-2', label: 'Receipt for balance payment', createdAt: '2026-07-08' },
-    ],
+    receiptItems: [],
     supportContacts: [
       { label: 'Admin support email', value: 'Tw3y111@aol.com' },
       { label: 'Admin support phone', value: '410-905-9649' },
@@ -528,7 +498,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     },
     refundStatus: 'No refund requested yet.',
     accountState: 'Active',
-    shortcutItems: ['Pay invoice', 'Download receipt', 'Request refund', 'Contact admin', 'Update payment method'],
+    shortcutItems: ['Pay invoice', 'Request refund', 'Contact admin', 'Update payment method'],
   },
 }
 
