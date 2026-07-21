@@ -448,15 +448,9 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     billingPortalUrl: '',
     paypalCheckoutUrl: process.env.PAYPAL_CHECKOUT_URL || '',
     paymentProcessorReady: true,
-    paymentItems: [
-      { id: 'pay-1', label: 'Service deposit', status: 'Paid', amount: '$125.00', method: 'Stripe card', date: '2026-07-01' },
-      { id: 'pay-2', label: 'Invoice balance', status: 'Pending', amount: '$240.00', method: 'Bank transfer', date: '2026-07-08' },
-    ],
+    paymentItems: [],
     paymentRequests: [],
-    invoiceItems: [
-      { id: 'inv-1', number: 'INV-1042', total: '$365.00', status: 'Open' },
-      { id: 'inv-2', number: 'INV-1039', total: '$125.00', status: 'Paid' },
-    ],
+    invoiceItems: [],
     receiptItems: [
       { id: 'rec-1', label: 'Receipt for service deposit', createdAt: '2026-07-01' },
     ],
@@ -478,13 +472,9 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     billingPortalUrl: '',
     paypalCheckoutUrl: process.env.PAYPAL_CHECKOUT_URL || '',
     paymentProcessorReady: true,
-    paymentItems: [
-      { id: 'pay-1', label: 'Invoice balance', status: 'Paid', amount: '$240.00', method: 'Stripe card', date: '2026-07-03' },
-    ],
+    paymentItems: [],
     paymentRequests: [],
-    invoiceItems: [
-      { id: 'inv-1', number: 'INV-1048', total: '$240.00', status: 'Paid' },
-    ],
+    invoiceItems: [],
     receiptItems: [
       { id: 'rec-1', label: 'Receipt for invoice INV-1048', createdAt: '2026-07-03' },
     ],
@@ -507,10 +497,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     billingPortalUrl: '',
     paypalCheckoutUrl: process.env.PAYPAL_CHECKOUT_URL || '',
     paymentProcessorReady: true,
-    paymentItems: [
-      { id: 'pay-1', label: 'Service deposit', status: 'Paid', amount: '$180.00', method: 'Debit card', date: '2026-07-02' },
-      { id: 'pay-2', label: 'Invoice balance', status: 'Pending', amount: '$295.00', method: 'Venmo', date: '2026-07-08' },
-    ],
+    paymentItems: [],
     paymentRequests: [
       {
         accountEmail: 'demo.customer@example.com',
@@ -524,10 +511,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
         verifiedAt: '2026-07-08T09:10:00.000Z',
       },
     ],
-    invoiceItems: [
-      { id: 'inv-1', number: 'INV-2001', total: '$475.00', status: 'Open' },
-      { id: 'inv-2', number: 'INV-1998', total: '$180.00', status: 'Paid' },
-    ],
+    invoiceItems: [],
     receiptItems: [
       { id: 'rec-1', label: 'Receipt for service deposit', createdAt: '2026-07-02' },
       { id: 'rec-2', label: 'Receipt for balance payment', createdAt: '2026-07-08' },
