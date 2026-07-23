@@ -593,6 +593,20 @@ const accountSchema = `
     resolved_at TEXT NOT NULL DEFAULT ''
   );
 
+  CREATE TABLE IF NOT EXISTS account_admin_invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Sent',
+    amount_cents INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'usd',
+    line_items TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    paid_at TEXT NOT NULL DEFAULT '',
+    stripe_invoice_id TEXT NOT NULL DEFAULT ''
+  );
+
   CREATE INDEX IF NOT EXISTS idx_account_sessions_user_email ON account_sessions(user_email);
   CREATE INDEX IF NOT EXISTS idx_account_payment_requests_user_email ON account_payment_requests(user_email);
   CREATE INDEX IF NOT EXISTS idx_account_payment_requests_confirmation_number ON account_payment_requests(confirmation_number);
@@ -600,6 +614,7 @@ const accountSchema = `
   CREATE INDEX IF NOT EXISTS idx_account_payments_confirmation_number ON account_payments(confirmation_number);
   CREATE INDEX IF NOT EXISTS idx_account_payments_checkout_session_id ON account_payments(checkout_session_id);
   CREATE INDEX IF NOT EXISTS idx_account_refund_requests_user_email ON account_refund_requests(user_email);
+  CREATE INDEX IF NOT EXISTS idx_account_admin_invoices_user_email ON account_admin_invoices(user_email);
 `
 
 const accountQueryOne = (db: Database, sql: string, params: unknown[] = []) => {
@@ -794,6 +809,14 @@ const ensureRefundSchemaCompatibility = (db: Database) => {
   }
   if (!columnNames.includes('stripe_refund_id')) {
     accountRun(db, "ALTER TABLE account_refund_requests ADD COLUMN stripe_refund_id TEXT NOT NULL DEFAULT ''")
+  }
+}
+
+const ensureInvoiceSchemaCompatibility = (db: Database) => {
+  // Invoices table is new, migration handled by CREATE TABLE IF NOT EXISTS
+  const tableExists = accountQueryAll(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='account_admin_invoices'")
+  if (tableExists.length === 0) {
+    // Table doesn't exist, will be created by schema initialization
   }
 }
 
@@ -1040,6 +1063,23 @@ const reconcileStripeCheckoutSession = async (checkoutSession: StripeCheckoutSes
         confirmedAt: new Date().toISOString(),
       })
     }
+
+    // If this is an admin invoice payment, mark it as paid
+    const invoiceId = checkoutSession.metadata?.invoiceId
+    if (invoiceId) {
+      try {
+        const db = await getAccountDb()
+        const paidAt = new Date().toISOString()
+        accountRun(
+          db,
+          `UPDATE account_admin_invoices SET status = 'Paid', paid_at = ${escapeSqlLiteral(paidAt)}, updated_at = CURRENT_TIMESTAMP WHERE id = ${invoiceId} AND user_email = ${escapeSqlLiteral(email)}`,
+        )
+        persistAccountDb(db)
+        console.log(`[INVOICE] Marked invoice ${invoiceId} as paid`)
+      } catch (error) {
+        console.error('[INVOICE] Error marking invoice as paid:', error)
+      }
+    }
   }
 
   return {
@@ -1241,6 +1281,7 @@ const initializeAccountDb = async () => {
     console.log('[DB] Ensuring schema compatibility...')
     ensureAccountUserSchemaCompatibility(db)
     ensureRefundSchemaCompatibility(db)
+    ensureInvoiceSchemaCompatibility(db)
     
     console.log('[DB] Seeding account users...')
     seedAccountUsers(db)
@@ -2108,6 +2149,217 @@ app.post('/api/admin/refund-requests/:id/update-status', checkAdminAuth, async (
   } catch (error) {
     console.error('Error updating refund status:', error)
     res.status(500).json({ message: 'Failed to update refund status' })
+  }
+})
+
+app.get('/api/account/invoices-pending', async (req, res) => {
+  try {
+    const email = await getAuthorizedAccountEmail(req)
+    if (!email) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const db = await getAccountDb()
+    const invoices = accountQueryAll(
+      db,
+      `SELECT id, amount_cents, currency, line_items, description, status, created_at FROM account_admin_invoices WHERE user_email = ${escapeSqlLiteral(email)} AND status = 'Sent' ORDER BY created_at DESC`,
+    ) as Array<{
+      id: number
+      amount_cents: number
+      currency: string
+      line_items: string
+      description: string
+      status: string
+      created_at: string
+    }>
+
+    const parsedInvoices = invoices.map((inv) => ({
+      ...inv,
+      lineItems: JSON.parse(inv.line_items || '[]') as Array<{ description: string; price_cents: number; quantity: number }>,
+    }))
+
+    res.json({ invoices: parsedInvoices })
+  } catch (error) {
+    console.error('Error fetching pending invoices:', error)
+    res.status(500).json({ message: 'Failed to fetch invoices' })
+  }
+})
+
+app.post('/api/admin/invoices', checkAdminAuth, async (req, res) => {
+  try {
+    const password = res.locals.adminPassword as string
+    const isValid = await verifyAdminPassword(password)
+    if (!isValid) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const body = req.body as Record<string, unknown>
+    const customerEmail = normalizeBodyString(body.customerEmail as string)
+    const description = normalizeBodyString(body.description as string)
+    const lineItems = body.lineItems as Array<{ description: string; price_cents: number; quantity: number }> | undefined
+
+    if (!customerEmail) {
+      return res.status(400).json({ message: 'Customer email is required' })
+    }
+
+    if (!lineItems || lineItems.length === 0) {
+      return res.status(400).json({ message: 'At least one line item is required' })
+    }
+
+    // Validate line items
+    let totalCents = 0
+    for (const item of lineItems) {
+      if (!item.description || item.price_cents < 0 || item.quantity < 1) {
+        return res.status(400).json({ message: 'Invalid line item' })
+      }
+      totalCents += item.price_cents * item.quantity
+    }
+
+    if (totalCents <= 0) {
+      return res.status(400).json({ message: 'Invoice total must be greater than 0' })
+    }
+
+    const db = await getAccountDb()
+    accountRun(
+      db,
+      `INSERT INTO account_admin_invoices (user_email, amount_cents, currency, line_items, description, status) VALUES (${escapeSqlLiteral(customerEmail)}, ${totalCents}, 'usd', ${escapeSqlLiteral(JSON.stringify(lineItems))}, ${escapeSqlLiteral(description)}, 'Sent')`,
+    )
+    persistAccountDb(db)
+
+    res.status(201).json({ ok: true, message: 'Invoice created and sent to customer' })
+  } catch (error) {
+    console.error('Error creating invoice:', error)
+    res.status(500).json({ message: 'Failed to create invoice' })
+  }
+})
+
+app.get('/api/admin/invoices', checkAdminAuth, async (req, res) => {
+  try {
+    const password = res.locals.adminPassword as string
+    const isValid = await verifyAdminPassword(password)
+    if (!isValid) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const db = await getAccountDb()
+    const invoices = accountQueryAll(
+      db,
+      `SELECT id, user_email, amount_cents, currency, line_items, description, status, created_at, paid_at FROM account_admin_invoices ORDER BY created_at DESC`,
+    ) as Array<{
+      id: number
+      user_email: string
+      amount_cents: number
+      currency: string
+      line_items: string
+      description: string
+      status: string
+      created_at: string
+      paid_at: string
+    }>
+
+    const parsedInvoices = invoices.map((inv) => ({
+      ...inv,
+      lineItems: JSON.parse(inv.line_items || '[]'),
+    }))
+
+    res.json({ invoices: parsedInvoices })
+  } catch (error) {
+    console.error('Error fetching invoices:', error)
+    res.status(500).json({ message: 'Failed to fetch invoices' })
+  }
+})
+
+app.post('/api/account/invoices/:id/checkout', async (req, res) => {
+  try {
+    const email = await getAuthorizedAccountEmail(req)
+    if (!email) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const { id } = req.params
+    const db = await getAccountDb()
+
+    const invoice = accountQueryOne(
+      db,
+      `SELECT id, user_email, amount_cents, currency, description FROM account_admin_invoices WHERE id = ${id} AND user_email = ${escapeSqlLiteral(email)} AND status = 'Sent'`,
+    ) as { id: number; user_email: string; amount_cents: number; currency: string; description: string } | null
+
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' })
+    }
+
+    if (!paymentProcessorReady) {
+      return res.status(400).json({ message: 'Payment processing is not available' })
+    }
+
+    try {
+      const stripe = getStripeClient()
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card', 'us_bank_account', 'link', 'cashapp', 'amazon_pay'] as any,
+        mode: 'payment',
+        customer_email: email,
+        line_items: [
+          {
+            price_data: {
+              currency: invoice.currency,
+              product_data: {
+                name: invoice.description || 'Invoice Payment',
+              },
+              unit_amount: invoice.amount_cents,
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${process.env.PUBLIC_URL || 'https://notconcrete.onrender.com'}/account?checkout=success&session={CHECKOUT_SESSION_ID}&invoice=${id}`,
+        cancel_url: `${process.env.PUBLIC_URL || 'https://notconcrete.onrender.com'}/account?checkout=cancel`,
+        metadata: {
+          invoiceId: String(invoice.id),
+          type: 'invoice_payment',
+        },
+      })
+
+      res.json({ ok: true, checkoutUrl: session.url, checkoutSessionId: session.id })
+    } catch (error) {
+      console.error('Stripe checkout error:', error)
+      res.status(500).json({ message: 'Failed to create checkout session' })
+    }
+  } catch (error) {
+    console.error('Error creating invoice checkout:', error)
+    res.status(500).json({ message: 'Failed to start payment' })
+  }
+})
+
+app.post('/api/admin/invoices/:id/mark-paid', checkAdminAuth, async (req, res) => {
+  try {
+    const password = res.locals.adminPassword as string
+    const isValid = await verifyAdminPassword(password)
+    if (!isValid) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const { id } = req.params
+    const db = await getAccountDb()
+
+    const invoice = accountQueryOne(
+      db,
+      `SELECT id FROM account_admin_invoices WHERE id = ${id}`,
+    )
+
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' })
+    }
+
+    const paidAt = new Date().toISOString()
+    accountRun(
+      db,
+      `UPDATE account_admin_invoices SET status = 'Paid', paid_at = ${escapeSqlLiteral(paidAt)}, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}`,
+    )
+    persistAccountDb(db)
+
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('Error marking invoice as paid:', error)
+    res.status(500).json({ message: 'Failed to mark invoice as paid' })
   }
 })
 

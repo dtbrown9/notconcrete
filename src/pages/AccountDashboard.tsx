@@ -167,6 +167,7 @@ export function AccountDashboard() {
   const [paymentItems, setPaymentItems] = useState(defaultPaymentItems)
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([])
   const [invoiceItems, setInvoiceItems] = useState<Array<{ id: string; number: string; total: string; status: 'Open' | 'Paid' | 'Refund requested'; url?: string; createdAt?: string }>>([])
+  const [pendingInvoices, setPendingInvoices] = useState<Array<{ id: number; amount_cents: number; currency: string; lineItems: Array<{ description: string; price_cents: number; quantity: number }>; description: string; status: string; created_at: string }>>([])
   const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([])
   const [supportContacts, setSupportContacts] = useState(defaultSupportContacts)
   const [language, setLanguage] = useState('English')
@@ -288,6 +289,21 @@ export function AccountDashboard() {
     }
   }
 
+  const fetchPendingInvoices = async (token: string) => {
+    try {
+      const response = await fetch('/api/account/invoices-pending', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (response.ok) {
+        const data = (await response.json()) as { invoices: typeof pendingInvoices }
+        setPendingInvoices(data.invoices || [])
+      }
+    } catch (error) {
+      console.error('Error fetching pending invoices:', error)
+    }
+  }
+
   const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSignInMessage('')
@@ -318,8 +334,9 @@ export function AccountDashboard() {
 
       if (accountResponse.ok) {
         applyAccountData((await accountResponse.json()) as AccountApiPayload)
-        // Also fetch refund status
+        // Also fetch refund status and pending invoices
         await fetchRefundStatus(session.token)
+        await fetchPendingInvoices(session.token)
       }
     } finally {
       setLoading(false)
@@ -367,8 +384,9 @@ export function AccountDashboard() {
 
       if (accountResponse.ok) {
         applyAccountData((await accountResponse.json()) as AccountApiPayload)
-        // Also fetch refund status
+        // Also fetch refund status and pending invoices
         await fetchRefundStatus(session.token)
+        await fetchPendingInvoices(session.token)
       }
     } finally {
       setLoading(false)
@@ -905,11 +923,79 @@ export function AccountDashboard() {
               </div>
             </section>
 
+            <section id="invoices-due" className="section-block split-layout">
+              <div className="glass account-panel">
+                <h3 className="card-label">Invoices due</h3>
+                {pendingInvoices.length === 0 ? (
+                  <p className="portal-note">No pending invoices. All invoices are paid.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {pendingInvoices.map((invoice) => (
+                      <div key={invoice.id} style={{ padding: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <div style={{ marginBottom: '12px' }}>
+                          <p style={{ margin: '0 0 4px 0', fontWeight: 'bold' }}>Amount due: ${(invoice.amount_cents / 100).toFixed(2)}</p>
+                          {invoice.description && <p style={{ margin: '0', fontSize: '0.9em', opacity: '0.8' }}>{invoice.description}</p>}
+                        </div>
+                        
+                        <div style={{ marginBottom: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                          <p style={{ margin: '0 0 8px 0', fontSize: '0.85em', fontWeight: '500', opacity: '0.7' }}>Services:</p>
+                          <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '0.9em' }}>
+                            {invoice.lineItems.map((item, idx) => (
+                              <li key={idx} style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+                                <span>{item.description} {item.quantity > 1 ? `(x${item.quantity})` : ''}</span>
+                                <span style={{ fontWeight: '500' }}>${(item.price_cents * item.quantity / 100).toFixed(2)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <button 
+                          onClick={() => {
+                            const handleInvoiceCheckout = async () => {
+                              try {
+                                const response = await fetch(`/api/account/invoices/${invoice.id}/checkout`, {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    Authorization: `Bearer ${sessionToken}`,
+                                  },
+                                })
+
+                                if (!response.ok) {
+                                  alert('Failed to start checkout')
+                                  return
+                                }
+
+                                const payload = (await response.json()) as { checkoutUrl?: string }
+                                if (payload.checkoutUrl) {
+                                  window.open(payload.checkoutUrl, '_self', 'noopener')
+                                  return
+                                }
+
+                                alert('Checkout could not be started')
+                              } catch {
+                                alert('Checkout could not be started')
+                              }
+                            }
+                            handleInvoiceCheckout()
+                          }}
+                          className="primary-button"
+                          style={{ width: '100%', padding: '8px' }}
+                        >
+                          Pay now
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
             <section id="invoice-history" className="section-block split-layout">
               <div className="glass account-panel">
                 <h3 className="card-label">Invoice history</h3>
                 <p className="portal-note" style={{ marginBottom: '16px' }}>
-                  Invoices are automatically created after payments are confirmed. This typically takes 1-2 minutes from payment completion. 
+                  Invoices are automatically created after payments are confirmed. This typically takes 1-2 minutes from payment completion.
                   Check back after your payment to see your invoice and receipt.
                 </p>
                 <div className="invoice-list">

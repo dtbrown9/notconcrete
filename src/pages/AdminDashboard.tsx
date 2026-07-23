@@ -73,6 +73,14 @@ export function AdminDashboard() {
   const [paymentError, setPaymentError] = useState('')
   const [refundMessage, setRefundMessage] = useState('')
   const [refundError, setRefundError] = useState('')
+  const [invoices, setInvoices] = useState<any[]>([])
+  const [invoiceCustomerEmail, setInvoiceCustomerEmail] = useState('')
+  const [invoiceDescription, setInvoiceDescription] = useState('')
+  const [invoiceLineItems, setInvoiceLineItems] = useState<Array<{ description: string; price_cents: number; quantity: number }>>([
+    { description: '', price_cents: 0, quantity: 1 },
+  ])
+  const [invoiceMessage, setInvoiceMessage] = useState('')
+  const [invoiceError, setInvoiceError] = useState('')
 
   // Settings state
   const [currentPasswordInput, setCurrentPasswordInput] = useState('')
@@ -163,7 +171,7 @@ export function AdminDashboard() {
   const fetchQuotes = async (authPassword: string) => {
     setLoading(true)
     try {
-      const [quotesResponse, feedbackResponse, paymentRequestsResponse, refundRequestsResponse] = await Promise.all([
+      const [quotesResponse, feedbackResponse, paymentRequestsResponse, refundRequestsResponse, invoicesResponse] = await Promise.all([
         fetch('/api/admin/quotes', {
           headers: { Authorization: `Bearer ${authPassword}` },
         }),
@@ -174,6 +182,9 @@ export function AdminDashboard() {
           headers: { Authorization: `Bearer ${authPassword}` },
         }),
         fetch('/api/admin/refund-requests', {
+          headers: { Authorization: `Bearer ${authPassword}` },
+        }),
+        fetch('/api/admin/invoices', {
           headers: { Authorization: `Bearer ${authPassword}` },
         }),
       ])
@@ -206,7 +217,14 @@ export function AdminDashboard() {
         setError('Failed to fetch refund requests')
       }
 
-      if (quotesResponse.ok && feedbackResponse.ok && paymentRequestsResponse.ok && refundRequestsResponse.ok) {
+      if (invoicesResponse.ok) {
+        const data = await invoicesResponse.json()
+        setInvoices(data.invoices || [])
+      } else {
+        setError('Failed to fetch invoices')
+      }
+
+      if (quotesResponse.ok && feedbackResponse.ok && paymentRequestsResponse.ok && refundRequestsResponse.ok && invoicesResponse.ok) {
         setError('')
       }
     } catch (err) {
@@ -383,6 +401,53 @@ export function AdminDashboard() {
       setTimeout(() => setRefundMessage(''), 3000)
     } catch (err) {
       setRefundError('Failed to reject refund')
+    }
+  }
+
+  const handleCreateInvoice = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setInvoiceError('')
+    setInvoiceMessage('')
+
+    if (!invoiceCustomerEmail.trim()) {
+      setInvoiceError('Customer email is required')
+      return
+    }
+
+    const validLineItems = invoiceLineItems.filter((item) => item.description.trim() && item.price_cents > 0)
+    if (validLineItems.length === 0) {
+      setInvoiceError('At least one line item with description and price is required')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/admin/invoices', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${password}`,
+        },
+        body: JSON.stringify({
+          customerEmail: invoiceCustomerEmail,
+          description: invoiceDescription,
+          lineItems: validLineItems,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setInvoiceError(data?.message || 'Failed to create invoice')
+        return
+      }
+
+      setInvoiceMessage('Invoice created and sent to customer')
+      setInvoiceCustomerEmail('')
+      setInvoiceDescription('')
+      setInvoiceLineItems([{ description: '', price_cents: 0, quantity: 1 }])
+      await fetchQuotes(password)
+      setTimeout(() => setInvoiceMessage(''), 3000)
+    } catch (err) {
+      setInvoiceError('Failed to create invoice')
     }
   }
 
@@ -902,6 +967,142 @@ export function AdminDashboard() {
             )}
             {refundError && <div className="error-text" style={{ marginTop: '12px' }}>{refundError}</div>}
             {refundMessage && <div className="success-text" style={{ marginTop: '12px' }}>{refundMessage}</div>}
+          </div>
+
+          <div style={{ marginBottom: '40px' }}>
+            <h3>Create Invoice</h3>
+            <form onSubmit={handleCreateInvoice} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+              <div>
+                <label>
+                  Customer Email:
+                  <input
+                    type="email"
+                    value={invoiceCustomerEmail}
+                    onChange={(e) => setInvoiceCustomerEmail(e.target.value)}
+                    placeholder="customer@example.com"
+                    style={{ marginTop: '4px', width: '100%', padding: '8px', borderRadius: '4px' }}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label>
+                  Invoice Description (optional):
+                  <input
+                    type="text"
+                    value={invoiceDescription}
+                    onChange={(e) => setInvoiceDescription(e.target.value)}
+                    placeholder="e.g., Cleaning Services - July"
+                    style={{ marginTop: '4px', width: '100%', padding: '8px', borderRadius: '4px' }}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px' }}>Services/Items:</label>
+                {invoiceLineItems.map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-start' }}>
+                    <input
+                      type="text"
+                      placeholder="Service description"
+                      value={item.description}
+                      onChange={(e) => {
+                        const updated = [...invoiceLineItems]
+                        updated[idx].description = e.target.value
+                        setInvoiceLineItems(updated)
+                      }}
+                      style={{ flex: 1, padding: '6px', borderRadius: '4px' }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Price"
+                      value={item.price_cents / 100}
+                      onChange={(e) => {
+                        const updated = [...invoiceLineItems]
+                        updated[idx].price_cents = Math.round(parseFloat(e.target.value || '0') * 100)
+                        setInvoiceLineItems(updated)
+                      }}
+                      min="0"
+                      step="0.01"
+                      style={{ width: '80px', padding: '6px', borderRadius: '4px' }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Qty"
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const updated = [...invoiceLineItems]
+                        updated[idx].quantity = Math.max(1, parseInt(e.target.value || '1'))
+                        setInvoiceLineItems(updated)
+                      }}
+                      min="1"
+                      style={{ width: '60px', padding: '6px', borderRadius: '4px' }}
+                    />
+                    {invoiceLineItems.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setInvoiceLineItems(invoiceLineItems.filter((_, i) => i !== idx))}
+                        className="secondary-button"
+                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setInvoiceLineItems([...invoiceLineItems, { description: '', price_cents: 0, quantity: 1 }])}
+                  className="secondary-button"
+                  style={{ padding: '6px 12px', fontSize: '12px', marginTop: '8px' }}
+                >
+                  + Add line item
+                </button>
+              </div>
+
+              <button type="submit" className="primary-button" style={{ padding: '10px' }}>
+                Create & Send Invoice
+              </button>
+            </form>
+
+            {invoiceError && <div className="error-text">{invoiceError}</div>}
+            {invoiceMessage && <div className="success-text">{invoiceMessage}</div>}
+
+            <h3 style={{ marginTop: '30px' }}>Invoices</h3>
+            {invoices.length === 0 ? (
+              <div className="admin-empty">No invoices created</div>
+            ) : (
+              <div className="admin-table-container">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Customer</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                      <th>Paid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((invoice) => (
+                      <tr key={invoice.id}>
+                        <td className="cell-email">{invoice.user_email}</td>
+                        <td>${(invoice.amount_cents / 100).toFixed(2)}</td>
+                        <td>
+                          {invoice.status === 'Paid' ? (
+                            <span style={{ color: '#4ade80', fontWeight: 'bold' }}>✓ Paid</span>
+                          ) : (
+                            <span>{invoice.status}</span>
+                          )}
+                        </td>
+                        <td className="cell-date">{new Date(invoice.created_at).toLocaleDateString()}</td>
+                        <td className="cell-date">{invoice.paid_at ? new Date(invoice.paid_at).toLocaleDateString() : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}
