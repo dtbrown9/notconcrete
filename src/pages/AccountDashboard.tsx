@@ -939,14 +939,35 @@ export function AccountDashboard() {
                         
                         <div style={{ marginBottom: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                           <p style={{ margin: '0 0 8px 0', fontSize: '0.85em', fontWeight: '500', opacity: '0.7' }}>Services:</p>
-                          <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '0.9em' }}>
-                            {invoice.lineItems.map((item, idx) => (
-                              <li key={idx} style={{ margin: '4px 0', display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
-                                <span>{item.description} {item.quantity > 1 ? `(x${item.quantity})` : ''}</span>
-                                <span style={{ fontWeight: '500' }}>${(item.price_cents * item.quantity / 100).toFixed(2)}</span>
-                              </li>
-                            ))}
-                          </ul>
+                          <div style={{ margin: '0', fontSize: '0.9em' }}>
+                            {/* Header row */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '12px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.2)', fontSize: '0.85em', fontWeight: '500', opacity: '0.7' }}>
+                              <span>Description</span>
+                              <span style={{ textAlign: 'right' }}>Price</span>
+                              <span style={{ textAlign: 'right' }}>Qty</span>
+                              <span style={{ textAlign: 'right' }}>Total</span>
+                            </div>
+                            {/* Line items */}
+                            {invoice.lineItems.map((item, idx) => {
+                              const lineTotal = item.price_cents * item.quantity / 100
+                              const unitPrice = item.price_cents / 100
+                              return (
+                                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '12px', marginBottom: '6px', alignItems: 'center' }}>
+                                  <span>{item.description}</span>
+                                  <span style={{ textAlign: 'right' }}>${unitPrice.toFixed(2)}</span>
+                                  <span style={{ textAlign: 'right' }}>{item.quantity}</span>
+                                  <span style={{ textAlign: 'right', fontWeight: '500' }}>${lineTotal.toFixed(2)}</span>
+                                </div>
+                              )
+                            })}
+                            {/* Total row */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '12px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.2)', fontWeight: '600' }}>
+                              <span>Total</span>
+                              <span></span>
+                              <span></span>
+                              <span style={{ textAlign: 'right' }}>${(invoice.amount_cents / 100).toFixed(2)}</span>
+                            </div>
+                          </div>
                         </div>
 
                         <button 
