@@ -1000,8 +1000,14 @@ export function AdminDashboard() {
 
               <div>
                 <label style={{ display: 'block', marginBottom: '8px' }}>Services/Items:</label>
+                <div style={{ marginBottom: '8px', display: 'grid', gridTemplateColumns: '1fr 120px 80px auto', gap: '8px', fontSize: '0.85em', opacity: '0.7', fontWeight: '500', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                  <span>Description</span>
+                  <span style={{ textAlign: 'center' }}>Price ($)</span>
+                  <span style={{ textAlign: 'center' }}>Qty</span>
+                  <span></span>
+                </div>
                 {invoiceLineItems.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-start' }}>
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px auto', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
                     <input
                       type="text"
                       placeholder="Service description"
@@ -1011,11 +1017,11 @@ export function AdminDashboard() {
                         updated[idx].description = e.target.value
                         setInvoiceLineItems(updated)
                       }}
-                      style={{ flex: 1, padding: '6px', borderRadius: '4px' }}
+                      style={{ padding: '6px', borderRadius: '4px' }}
                     />
                     <input
                       type="number"
-                      placeholder="Price"
+                      placeholder="0.00"
                       value={item.price_cents / 100}
                       onChange={(e) => {
                         const updated = [...invoiceLineItems]
@@ -1024,11 +1030,11 @@ export function AdminDashboard() {
                       }}
                       min="0"
                       step="0.01"
-                      style={{ width: '80px', padding: '6px', borderRadius: '4px' }}
+                      style={{ padding: '6px', borderRadius: '4px', textAlign: 'center' }}
                     />
                     <input
                       type="number"
-                      placeholder="Qty"
+                      placeholder="1"
                       value={item.quantity}
                       onChange={(e) => {
                         const updated = [...invoiceLineItems]
@@ -1036,7 +1042,7 @@ export function AdminDashboard() {
                         setInvoiceLineItems(updated)
                       }}
                       min="1"
-                      style={{ width: '60px', padding: '6px', borderRadius: '4px' }}
+                      style={{ padding: '6px', borderRadius: '4px', textAlign: 'center' }}
                     />
                     {invoiceLineItems.length > 1 && (
                       <button
@@ -1050,11 +1056,18 @@ export function AdminDashboard() {
                     )}
                   </div>
                 ))}
+                
+                {/* Invoice Total */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px auto', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.2)', fontWeight: '600', fontSize: '1.1em' }}>
+                  <span style={{ textAlign: 'right', gridColumn: '1 / 2' }}>Invoice Total:</span>
+                  <span style={{ textAlign: 'center', gridColumn: '2 / 3' }}>${(invoiceLineItems.reduce((sum, item) => sum + item.price_cents * item.quantity, 0) / 100).toFixed(2)}</span>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setInvoiceLineItems([...invoiceLineItems, { description: '', price_cents: 0, quantity: 1 }])}
                   className="secondary-button"
-                  style={{ padding: '6px 12px', fontSize: '12px', marginTop: '8px' }}
+                  style={{ padding: '6px 12px', fontSize: '12px', marginTop: '12px' }}
                 >
                   + Add line item
                 </button>
