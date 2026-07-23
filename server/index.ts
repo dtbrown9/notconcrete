@@ -432,75 +432,7 @@ const fallbackAccountProfiles: Record<string, AccountPayload> = {
     accountState: 'Active',
     shortcutItems: ['Pay invoice', 'Request refund', 'Contact admin', 'Update payment method'],
   },
-  'jordan.lee@example.com': {
-    accountEmail: 'jordan.lee@example.com',
-    accountName: 'Jordan Lee',
-    billingPortalUrl: '',
-    paypalCheckoutUrl: process.env.PAYPAL_CHECKOUT_URL || '',
-    paymentProcessorReady: true,
-    paymentItems: [],
-    paymentRequests: [],
-    invoiceItems: [],
-    receiptItems: [],
-    supportContacts: [
-      { label: 'Admin support email', value: 'Tw3y111@aol.com' },
-    ],
-    preferences: {
-      language: 'English',
-      timeZone: 'Eastern Time',
-      accessibility: 'Standard',
-    },
-    refundStatus: 'No refund requested yet.',
-    accountState: 'Active',
-    shortcutItems: ['Pay invoice', 'Request refund'],
-  },
-  'tammy.business@example.com': {
-    accountEmail: 'tammy.business@example.com',
-    accountName: 'Tammy',
-    billingPortalUrl: '',
-    paypalCheckoutUrl: process.env.PAYPAL_CHECKOUT_URL || '',
-    paymentProcessorReady: true,
-    paymentItems: [],
-    paymentRequests: [],
-    invoiceItems: [],
-    receiptItems: [],
-    supportContacts: [
-      { label: 'Admin support email', value: 'Tw3y111@aol.com' },
-      { label: 'Admin support phone', value: '410-905-9649' },
-    ],
-    preferences: {
-      language: 'English',
-      timeZone: 'Eastern Time',
-      accessibility: 'Standard',
-    },
-    refundStatus: 'No refund requested yet.',
-    accountState: 'Active',
-    shortcutItems: ['Pay invoice', 'Request refund', 'Contact admin'],
-  },
-  'demo.customer@example.com': {
-    accountEmail: 'demo.customer@example.com',
-    accountName: 'Demo Customer',
-    billingPortalUrl: '',
-    paypalCheckoutUrl: process.env.PAYPAL_CHECKOUT_URL || '',
-    paymentProcessorReady: true,
-    paymentItems: [],
-    paymentRequests: [],
-    invoiceItems: [],
-    receiptItems: [],
-    supportContacts: [
-      { label: 'Admin support email', value: 'Tw3y111@aol.com' },
-      { label: 'Admin support phone', value: '410-905-9649' },
-      { label: 'Owner contact email', value: 'Winfield.raekwon@yahoo.com' },
-    ],
-    preferences: {
-      language: 'English',
-      timeZone: 'Eastern Time',
-      accessibility: 'High contrast',
-    },
-    refundStatus: 'No refund requested yet.',
-    accountState: 'Active',
-    shortcutItems: ['Pay invoice', 'Request refund', 'Contact admin', 'Update payment method'],
-  },
+
 }
 
 const fallbackAccountData = fallbackAccountProfiles.default
@@ -508,11 +440,7 @@ const fallbackAccountData = fallbackAccountProfiles.default
 const accountDbDir = path.join(process.cwd(), 'data')
 const accountDbPath = path.join(accountDbDir, isTestEnvironment ? 'notconcrete-auth.test.sqlite' : 'notconcrete-auth.sqlite')
 const accountSessionLifetimeMs = 1000 * 60 * 60 * 24 * 30
-const accountUserSeeds: AccountUserSeed[] = [
-  { email: 'jordan.lee@example.com', displayName: 'Jordan Lee', password: 'jordan123' },
-  { email: 'tammy.business@example.com', displayName: 'Tammy', password: 'tammy123' },
-  { email: 'demo.customer@example.com', displayName: 'Demo Customer', password: 'demo123' },
-]
+const accountUserSeeds: AccountUserSeed[] = []
 
 mkdirSync(accountDbDir, { recursive: true })
 
