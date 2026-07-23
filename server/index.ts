@@ -2288,7 +2288,7 @@ app.post('/api/account/invoices/:id/checkout', async (req, res) => {
       return res.status(404).json({ message: 'Invoice not found' })
     }
 
-    if (!paymentProcessorReady) {
+    if (!isStripeConfigured()) {
       return res.status(400).json({ message: 'Payment processing is not available' })
     }
 
